@@ -26,55 +26,58 @@ Write-Log "=== MAIN SETUP LOGIC STARTED ===" "Cyan"
 if (-not (Test-Path $SetupDir)) { New-Item -Path $SetupDir -ItemType Directory -Force | Out-Null }
 
 # ==========================================
-# 0. DYNAMIC DOWNLOAD & UNZIP (API MODE)
+# 0. DYNAMIC DOWNLOAD & UNZIP (BITS - HIGH SPEED)
 # ==========================================
-Write-Log "Connecting to GitHub API to fetch file list..." "Cyan"
+Write-Log "Connecting to GitHub API..." "Cyan"
+
+
+Import-Module BitsTransfer -ErrorAction SilentlyContinue
 
 if (-not (Test-Path $SetupDir)) { New-Item -Path $SetupDir -ItemType Directory -Force | Out-Null }
 
 try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $ApiUrl = "https://api.github.com/repos/$GithubUser/$RepoName/releases/tags/$ReleaseTag"
-    
     $ReleaseData = Invoke-RestMethod -Uri $ApiUrl -UseBasicParsing
     
     if ($ReleaseData.assets.Count -gt 0) {
-        Write-Log "Found $($ReleaseData.assets.Count) files in release. Starting download..." "Green"
+        Write-Log "Found $($ReleaseData.assets.Count) files. Starting High-Speed Download..." "Green"
         
         foreach ($asset in $ReleaseData.assets) {
-            $FileName  = $asset.name
+            $FileName    = $asset.name
             $DownloadUrl = $asset.browser_download_url
-            $LocalPath = Join-Path $SetupDir $FileName
+            $LocalPath   = Join-Path $SetupDir $FileName
             
             if ($FileName -match "Source code") { continue }
 
             if (-not (Test-Path $LocalPath) -or (Get-Item $LocalPath).Length -eq 0) {
-                Write-Log "Downloading: $FileName..." "Yellow"
+                Write-Log "Downloading: $FileName (BITS)..." "Yellow"
+                
                 try {
-                    Invoke-WebRequest -Uri $DownloadUrl -OutFile $LocalPath -UseBasicParsing
-                    Write-Log "  -> Saved." "Gray"
+                    Start-BitsTransfer -Source $DownloadUrl -Destination $LocalPath -Priority Foreground -ErrorAction Stop
+                    Write-Log "  -> Complete." "Gray"
                 } catch {
-                    Write-Log "  -> Failed to download $FileName : $_" "Red"
-                    continue
+                    Write-Log "  -> BITS Failed ($($_)). Trying fallback..." "Red"
+                    Invoke-WebRequest -Uri $DownloadUrl -OutFile $LocalPath -UseBasicParsing
                 }
             } else {
-                Write-Log "Skipping $FileName (Already exists)." "Gray"
+                Write-Log "Skipping $FileName (Exists)." "Gray"
             }
 
+            # Авто-Распаковка ZIP
             if ($LocalPath.EndsWith(".zip")) {
-                Write-Log "  -> Archive detected. Extracting..." "Cyan"
+                Write-Log "  -> Unzipping archive..." "Cyan"
                 try {
                     Expand-Archive -Path $LocalPath -DestinationPath $SetupDir -Force
-                    
-                    Remove-Item $LocalPath -Force
-                    Write-Log "  -> Extracted and ZIP deleted." "Green"
+                    Remove-Item $LocalPath -Force 
+                    Write-Log "  -> Extracted." "Green"
                 } catch {
                     Write-Log "  -> Extraction failed: $_" "Red"
                 }
             }
         }
     } else {
-        Write-Log "WARNING: No assets found in this release tag!" "Red"
+        Write-Log "WARNING: No files found in release '$ReleaseTag'!" "Red"
     }
 
 } catch {
