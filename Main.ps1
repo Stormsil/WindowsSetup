@@ -191,23 +191,34 @@ try {
 }
 
 # --- 5c. ACTIVATION (MAS - NEW LINK) ---
+
 Write-Log "Activating Windows (MAS HWID)..." "Yellow"
+$masFile = "$env:TEMP\MAS_AIO.cmd"
 
 try {
-    # OFFICIAL MAS COMMAND (Silent Mode via ScriptBlock)
-    # This downloads the script from get.activated.win and passes /hwid argument
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Write-Log "  -> Downloading via fast Curl..." "Gray"
     
-    Write-Log "  -> Connecting to get.activated.win..." "Gray"
+    # Use curl with Cloudflare DNS (DoH) to bypass slow local DNS
+    # -L: Follow redirects (get.activated.win -> github)
+    # -s: Silent mode
+    # -o: Output to file
+    $curlArgs = "-s", "-L", "--doh-url", "https://1.1.1.1/dns-query", "-o", "`"$masFile`"", "https://get.activated.win"
     
-    & ([ScriptBlock]::Create((irm https://get.activated.win))) /hwid | Out-Null
-    
-    Write-Log "  -> Activation sequence executed." "Green"
-    Write-Log "  -> Check Settings > Activation to confirm." "Gray"
+    Start-Process -FilePath "curl.exe" -ArgumentList $curlArgs -Wait -NoNewWindow
+
+    if (Test-Path $masFile) {
+        Write-Log "  -> Executing HWID..." "Gray"
+        # Run the script in silent HWID mode
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$masFile`" /hwid" -WindowStyle Hidden -Wait
+        
+        Write-Log "  -> Activation command executed." "Green"
+        Remove-Item $masFile -Force -ErrorAction SilentlyContinue
+    } else {
+        throw "Curl failed to download the activator."
+    }
 
 } catch {
     Write-Log "  -> Activation Failed: $_" "Red"
-    Write-Log "  -> Please check Internet connectivity or DNS." "Red"
 }
 
 # ==========================================
