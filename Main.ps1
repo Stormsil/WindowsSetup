@@ -333,16 +333,24 @@ $botConfig = Join-Path $PSScriptRoot "config.json"
 if ((Test-Path $botExe) -and (Test-Path $botConfig)) {
     Write-Log "Launching PADLogger..." "Green"
     Write-Log "  PLEASE DO NOT TOUCH MOUSE OR KEYBOARD! " "Red"
+    
     try {
-        Start-Process -FilePath $botExe -WorkingDirectory $PSScriptRoot -PassThru -Wait
-        Write-Log "Bot finished." "Green"
+        # Removed '-Wait' so the script continues immediately
+        $proc = Start-Process -FilePath $botExe -WorkingDirectory $PSScriptRoot -PassThru
+        
+        # Check if process started (has an ID) instead of ExitCode
+        if ($proc.Id) {
+            Write-Log "Bot launched successfully (PID: $($proc.Id))." "Green"
+            Write-Log "Closing setup script..." "Gray"
+        } else {
+            Write-Log "Failed to launch Bot process." "Red"
+        }
     } catch {
-        Write-Log "Bot Crash: $_" "Red"
+        Write-Log "Critical error launching PADLogger: $_" "Red"
     }
 } else {
     Write-Log "ERROR: PADLogger.exe or config.json missing in $PSScriptRoot" "Red"
 }
-
 # ==========================================
 # 13. COMPLETION
 # ==========================================
