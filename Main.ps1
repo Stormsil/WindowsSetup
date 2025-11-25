@@ -172,55 +172,6 @@ if (Test-Path $wubExe) {
     Write-Log "  -> WARNING: Wub_x64.exe not found locally." "Red"
 }
 
-# --- 5b. DEBLOAT (Raphire) ---
-Write-Log "Running Debloat (Raphire)..." "Yellow"
-$debloatScript = "$env:TEMP\Win11Debloat.ps1"
-$debloatUrl = "https://raw.githubusercontent.com/Raphire/Win11Debloat/master/Win11Debloat.ps1"
-
-try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri $debloatUrl -OutFile $debloatScript -UseBasicParsing
-    
-    if (Test-Path $debloatScript) {
-        Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass", "-File `"$debloatScript`"", "-Silent", "-RemoveApps", "-DisableTelemetry", "-DisableBing", "-DisableGaming" -Wait
-        Write-Log "  -> Telemetry disabled & Apps removed." "Green"
-        Remove-Item $debloatScript -Force -ErrorAction SilentlyContinue
-    }
-} catch {
-    Write-Log "  -> Debloat Error: $_" "Red"
-}
-
-# --- 5c. ACTIVATION (MAS - NEW LINK) ---
-
-Write-Log "Activating Windows (MAS HWID)..." "Yellow"
-$masFile = "$env:TEMP\MAS_AIO.cmd"
-
-try {
-    Write-Log "  -> Downloading via fast Curl..." "Gray"
-    
-    # Use curl with Cloudflare DNS (DoH) to bypass slow local DNS
-    # -L: Follow redirects (get.activated.win -> github)
-    # -s: Silent mode
-    # -o: Output to file
-    $curlArgs = "-s", "-L", "--doh-url", "https://1.1.1.1/dns-query", "-o", "`"$masFile`"", "https://get.activated.win"
-    
-    Start-Process -FilePath "curl.exe" -ArgumentList $curlArgs -Wait -NoNewWindow
-
-    if (Test-Path $masFile) {
-        Write-Log "  -> Executing HWID..." "Gray"
-        # Run the script in silent HWID mode
-        Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$masFile`" /hwid" -WindowStyle Hidden -Wait
-        
-        Write-Log "  -> Activation command executed." "Green"
-        Remove-Item $masFile -Force -ErrorAction SilentlyContinue
-    } else {
-        throw "Curl failed to download the activator."
-    }
-
-} catch {
-    Write-Log "  -> Activation Failed: $_" "Red"
-}
-
 # ==========================================
 # 6. PROFILE & SCHEDULER
 # ==========================================
@@ -260,7 +211,7 @@ if (-not (Get-Command "choco" -ErrorAction SilentlyContinue)) {
 Write-Log "Installing Local Drivers..." "Yellow"
 
 # 8a. Trust Certificate (Tether)
-$tetherPath = Join-Path $SetupDir "TetherDriver.exe"
+$tetherPath = Join-Path $SetupDir "TetherDriverSetup.exe"
 if (Test-Path $tetherPath) {
     try {
         $sig = Get-AuthenticodeSignature -FilePath $tetherPath
