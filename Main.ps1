@@ -1,19 +1,28 @@
-# ==========================================
-# Главная логика установки Windows
-# ==========================================
-# This script acts as the "Brain". It installs everything.
-# Network is assumed to be configured by Start.ps1.
+# ==============================================================================
+# MAIN ORCHESTRATOR (FULL & PRIVATE REPO COMPATIBLE)
+# ==============================================================================
+# AUTHOR: Stormsil
+# REPO: WindowsSetup
+# VERSION: 3.1 (Full logic restored + Private Repo Patch)
+# ==============================================================================
+
+# 1. ПРИНИМАЕМ ТОКЕН ОТ BOOTSTRAPPER (Это единственное изменение в шапке)
+param(
+    [string]$Token = ""
+)
 
 # --- CONFIGURATION ---
 $GithubUser = "Stormsil"
 $RepoName   = "WindowsSetup"
-$ReleaseTag = "files" 
-$SetupDir   = "C:\WindowsSetup"
+$ReleaseTag = "files"
+# ВАЖНО: Так как Bootstrapper запускает нас из папки System, используем текущий путь
+$SetupDir   = $PSScriptRoot 
 
 # ==========================================
 # -1. INIT
 # ==========================================
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 function Write-Log { 
     param([string]$Msg, [string]$Color="White") 
@@ -22,43 +31,55 @@ function Write-Log {
 
 Write-Log "=== MAIN SETUP LOGIC STARTED ===" "Cyan"
 
-# Create setup directory
+if (-not $Token) {
+    Write-Log "WARNING: No GitHub Token provided! Downloads from Private Repo will fail." "Red"
+}
+
+# Ensure setup directory exists (хотя мы уже в нем)
 if (-not (Test-Path $SetupDir)) { New-Item -Path $SetupDir -ItemType Directory -Force | Out-Null }
 
 # ==========================================
-# 0. DYNAMIC DOWNLOAD & UNZIP (BITS - HIGH SPEED)
+# 0. DYNAMIC DOWNLOAD (WEBCLIENT - PRIVATE ACCESS)
 # ==========================================
 Write-Log "Connecting to GitHub API..." "Cyan"
 
-
-Import-Module BitsTransfer -ErrorAction SilentlyContinue
-
-if (-not (Test-Path $SetupDir)) { New-Item -Path $SetupDir -ItemType Directory -Force | Out-Null }
-
 try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    # Для приватного репо нужны заголовки
+    $Headers = @{
+        "Authorization" = "token $Token"
+        "User-Agent"    = "PowerShell-Setup"
+    }
+    
     $ApiUrl = "https://api.github.com/repos/$GithubUser/$RepoName/releases/tags/$ReleaseTag"
-    $ReleaseData = Invoke-RestMethod -Uri $ApiUrl -UseBasicParsing
+    
+    # Получаем список файлов
+    $ReleaseData = Invoke-RestMethod -Uri $ApiUrl -Headers $Headers -UseBasicParsing
     
     if ($ReleaseData.assets.Count -gt 0) {
         Write-Log "Found $($ReleaseData.assets.Count) files. Starting High-Speed Download..." "Green"
         
+        # Создаем быстрый WebClient (аналог BITS по скорости, но работает с токенами)
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("Authorization", "token $Token")
+        $wc.Headers.Add("User-Agent", "PowerShell-Setup")
+        $wc.Headers.Add("Accept", "application/octet-stream") # Магия для скачивания бинарников
+        
         foreach ($asset in $ReleaseData.assets) {
             $FileName    = $asset.name
-            $DownloadUrl = $asset.browser_download_url
+            # В приватных репо используем 'url', а не 'browser_download_url'
+            $DownloadUrl = $asset.url 
             $LocalPath   = Join-Path $SetupDir $FileName
             
             if ($FileName -match "Source code") { continue }
 
             if (-not (Test-Path $LocalPath) -or (Get-Item $LocalPath).Length -eq 0) {
-                Write-Log "Downloading: $FileName (BITS)..." "Yellow"
+                Write-Log "Downloading: $FileName..." "Yellow"
                 
                 try {
-                    Start-BitsTransfer -Source $DownloadUrl -Destination $LocalPath -Priority Foreground -ErrorAction Stop
+                    $wc.DownloadFile($DownloadUrl, $LocalPath)
                     Write-Log "  -> Complete." "Gray"
                 } catch {
-                    Write-Log "  -> BITS Failed ($($_)). Trying fallback..." "Red"
-                    Invoke-WebRequest -Uri $DownloadUrl -OutFile $LocalPath -UseBasicParsing
+                    Write-Log "  -> Download Failed: $_" "Red"
                 }
             } else {
                 Write-Log "Skipping $FileName (Exists)." "Gray"
@@ -81,20 +102,18 @@ try {
     }
 
 } catch {
-    Write-Log "API ERROR: Could not fetch release info. Check User/Repo/Tag." "Red"
+    Write-Log "API ERROR: Could not fetch release info. Check Token/User/Repo." "Red"
     Write-Log "Details: $_" "Red"
 }
 
 # ==========================================
 # 1. INSTALL VCREDIST (BATCH)
 # ==========================================
-# Запускаем install_all.bat, который вылетел из vcredist.zip
-$vcredistBat = "$SetupDir\vcredist\install_all.bat"
+$vcredistBat = Join-Path $SetupDir "vcredist\install_all.bat"
 
 if (Test-Path $vcredistBat) {
     Write-Log "Installing VCRedist (AIO)..." "Cyan"
     try {
-        # -Verb RunAs запускает от имени админа (хотя скрипт и так админ, но на всякий случай)
         Start-Process -FilePath $vcredistBat -Verb RunAs -Wait
         Write-Log "  -> VCRedist installation complete." "Green"
     } catch {
@@ -105,7 +124,7 @@ if (Test-Path $vcredistBat) {
 }
 
 # ==========================================
-# 1. POWER SETTINGS
+# 2. POWER SETTINGS
 # ==========================================
 Write-Log "Applying High Performance power settings..." "Gray"
 try {
@@ -119,7 +138,7 @@ try {
 }
 
 # ==========================================
-# 2. ENVIRONMENT & CONSOLE TWEAKS
+# 3. ENVIRONMENT & CONSOLE TWEAKS
 # ==========================================
 Write-Log "Configuring environment variables..." "Gray"
 [Environment]::SetEnvironmentVariable("OPENCV_SKIP_CPU_BASELINE_CHECK", "1", "User")
@@ -129,9 +148,10 @@ if (-not (Test-Path $consolePath)) { New-Item $consolePath -Force | Out-Null }
 New-ItemProperty -Path $consolePath -Name "WindowSize" -Value 0x001E005A -PropertyType DWord -Force | Out-Null
 New-ItemProperty -Path $consolePath -Name "WindowPosition" -Value 0 -PropertyType DWord -Force | Out-Null
 New-ItemProperty -Path $consolePath -Name "ScreenBufferSize" -Value 0x2328005A -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $consolePath -Name "QuickEdit" -Value 0 -PropertyType DWord -Force | Out-Null
 
 # ==========================================
-# 3. AUTO-LOGIN SETUP
+# 4. AUTO-LOGIN SETUP
 # ==========================================
 Write-Log "Setting up Auto-Login (User: Alex)..." "Gray"
 $winlogonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
@@ -144,7 +164,7 @@ New-ItemProperty -Path $winlogonPath -Name "DefaultUserName" -Value "Alex" -Prop
 New-ItemProperty -Path $winlogonPath -Name "DefaultPassword" -Value "1204" -PropertyType String -Force | Out-Null
 
 # ==========================================
-# 4. DISABLE NETWORK WIZARD
+# 5. DISABLE NETWORK WIZARD
 # ==========================================
 Write-Log "Disabling Network Location Wizard..." "Gray"
 $netPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff"
@@ -152,12 +172,11 @@ if (-not (Test-Path $netPath)) { New-Item $netPath -Force | Out-Null }
 New-ItemProperty -Path $netPath -Name "Default" -Value "" -PropertyType String -Force | Out-Null
 
 # ==========================================
-# 5. SYSTEM HARDENING
+# 6. SYSTEM HARDENING
 # ==========================================
 Write-Log "`n=== SYSTEM HARDENING ===" "Cyan"
 
-# --- 5a. WINDOWS UPDATE BLOCKER (WUB) ---
-# We expect Wub_x64.exe to be present in C:\WindowsSetup
+# --- 6a. WINDOWS UPDATE BLOCKER (WUB) ---
 $wubExe = Join-Path $SetupDir "Wub_x64.exe"
 
 if (Test-Path $wubExe) {
@@ -173,7 +192,7 @@ if (Test-Path $wubExe) {
 }
 
 # ==========================================
-# 6. PROFILE & SCHEDULER
+# 7. PROFILE & SCHEDULER
 # ==========================================
 Write-Log "Setting Network Profile to Public..." "Gray"
 Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Public -ErrorAction SilentlyContinue
@@ -191,7 +210,7 @@ try {
 } catch {}
 
 # ==========================================
-# 7. INSTALL CHOCOLATEY
+# 8. INSTALL CHOCOLATEY
 # ==========================================
 Write-Log "`n=== Software Installation ===" "Cyan"
 
@@ -206,11 +225,11 @@ if (-not (Get-Command "choco" -ErrorAction SilentlyContinue)) {
 }
 
 # ==========================================
-# 8. INSTALL LOCAL DRIVERS (DOWNLOADED BY LOADER)
+# 9. INSTALL LOCAL DRIVERS (DOWNLOADED BY LOADER)
 # ==========================================
 Write-Log "Installing Local Drivers..." "Yellow"
 
-# 8a. Trust Certificate (Tether)
+# 9a. Trust Certificate (Tether)
 $tetherPath = Join-Path $SetupDir "TetherDriverSetup.exe"
 if (Test-Path $tetherPath) {
     try {
@@ -223,35 +242,33 @@ if (Test-Path $tetherPath) {
     } catch {}
 }
 
-# 8b. Install List
-# IMPORTANT: These files must exist in C:\WindowsSetup
-# I updated filenames based on your Screenshot (Driver.exe, TSM.exe)
+# 9b. Install List
 $localInstallers = @(
-    @{ Name="Nvidia Driver";   Path=Join-Path $SetupDir "DriverSetup.exe";       Args="-s" },
-    @{ Name="Tether Driver";   Path=Join-Path $SetupDir "TetherDriverSetup.exe"; Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
-    @{ Name="TSM Application"; Path=Join-Path $SetupDir "TSMSetup.exe";          Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
-    @{ Name="NoMachine";     Path="$SetupDir\NomachineSetup.exe";    Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
-    @{ Name="Proxifier";     Path="$SetupDir\ProxifierSetup.exe";    Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
-    @{ Name="Resilio Sync";  Path="$SetupDir\ResilioSetup.exe";      Args="/PERFORMINSTALL /S /NORUN" } 
+    @{ Name="Nvidia Driver";   Path="DriverSetup.exe";       Args="-s" },
+    @{ Name="Tether Driver";   Path="TetherDriverSetup.exe"; Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
+    @{ Name="TSM Application"; Path="TSMSetup.exe";          Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
+    @{ Name="NoMachine";       Path="NomachineSetup.exe";    Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
+    @{ Name="Proxifier";       Path="ProxifierSetup.exe";    Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
+    @{ Name="Resilio Sync";    Path="ResilioSetup.exe";      Args="/PERFORMINSTALL /S /NORUN" } 
 )
 
 foreach ($app in $localInstallers) {
-    if (Test-Path $app.Path) {
+    $FullPath = Join-Path $SetupDir $app.Path
+    if (Test-Path $FullPath) {
         Write-Log "Running $($app.Name)..." "Cyan"
         try {
-            $proc = Start-Process -FilePath $app.Path -ArgumentList $app.Args -Wait -PassThru -ErrorAction Stop
+            $proc = Start-Process -FilePath $FullPath -ArgumentList $app.Args -Wait -PassThru -ErrorAction Stop
             if ($proc.ExitCode -eq 0) { Write-Log "  -> Success." "Green" } 
             else { Write-Log "  -> Finished with code $($proc.ExitCode)." "Gray" }
         } catch { Write-Log "  -> ERROR: $_" "Red" }
     } else {
-        Write-Log "Skipping $($app.Name): File not found ($($app.Path))." "Gray"
+        Write-Log "Skipping $($app.Name): File not found." "Gray"
     }
 }
 
 # ==========================================
-# 9. INSTALL CHOCO APPS
+# 10. INSTALL CHOCO APPS
 # ==========================================
-# Proxifier removed (moved to local if needed), NoMachine is here
 $chocoApps = @(
     "dotnet-8.0-sdk",
     "webview2-runtime",
@@ -266,7 +283,7 @@ if (Get-Command "choco" -ErrorAction SilentlyContinue) {
 }
 
 # ==========================================
-# 10. CONFIGURE NOMACHINE
+# 11. CONFIGURE NOMACHINE (FULL PARSING)
 # ==========================================
 Write-Log "Configuring NoMachine..." "Yellow"
 $nodeCfgPath = "C:\Program Files\NoMachine\etc\node.cfg"
@@ -285,9 +302,11 @@ if (Test-Path $nodeCfgPath) {
         $newContent = @()
         $modified = $false
         
+        # Полный парсинг как в оригинале
         foreach ($line in $content) {
             $newLine = $line
             foreach ($key in $settings.Keys) {
+                # Регулярка для поиска ключа
                 if ($line -match "^\s*#?\s*$key\s+\d+") {
                     $newValue = "$key $($settings[$key])"
                     if ($line -ne $newValue) { $newLine = $newValue; $modified = $true }
@@ -301,20 +320,22 @@ if (Test-Path $nodeCfgPath) {
             Set-Content -Path $nodeCfgPath -Value $newContent
             Start-Service "nxserver" -ErrorAction SilentlyContinue
             Write-Log "  -> Config updated." "Green"
+        } else {
+            Write-Log "  -> Config already optimal." "Gray"
         }
     } catch { Write-Log "  -> Config Error: $_" "Red" }
 }
 
 # ==========================================
-# 11. INSTALL POWER AUTOMATE (BITS)
+# 12. INSTALL POWER AUTOMATE
 # ==========================================
 Write-Log "Installing Power Automate..." "Yellow"
 $padUrl = "https://go.microsoft.com/fwlink/?linkid=2102613"
 $padInstaller = "$env:TEMP\PADSetup.exe"
 
 try {
-    Import-Module BitsTransfer -ErrorAction SilentlyContinue
-    Start-BitsTransfer -Source $padUrl -Destination $padInstaller -Priority Foreground
+    # Using WebClient instead of BITS for simplicity in Main
+    (New-Object System.Net.WebClient).DownloadFile($padUrl, $padInstaller)
     Start-Process -FilePath $padInstaller -ArgumentList "-Silent", "-Install", "-ACCEPTEULA" -PassThru -Wait
     Remove-Item -Path $padInstaller -Force -ErrorAction SilentlyContinue
     Write-Log "  -> Installed." "Green"
@@ -323,12 +344,12 @@ try {
 }
 
 # ==========================================
-# 12. START BOT (PADLogger)
+# 13. START BOT (PADLogger)
 # ==========================================
 Write-Log "`n=== Starting Auto-Login Bot ===" "Cyan"
 
-$botExe    = Join-Path $PSScriptRoot "PADLogger.exe"
-$botConfig = Join-Path $PSScriptRoot "config.json"
+$botExe    = Join-Path $SetupDir "PADLogger.exe"
+$botConfig = Join-Path $SetupDir "config.json"
 
 if ((Test-Path $botExe) -and (Test-Path $botConfig)) {
     Write-Log "Launching PADLogger..." "Green"
@@ -336,7 +357,7 @@ if ((Test-Path $botExe) -and (Test-Path $botConfig)) {
     
     try {
         # Removed '-Wait' so the script continues immediately
-        $proc = Start-Process -FilePath $botExe -WorkingDirectory $PSScriptRoot -PassThru
+        $proc = Start-Process -FilePath $botExe -WorkingDirectory $SetupDir -PassThru
         
         # Check if process started (has an ID) instead of ExitCode
         if ($proc.Id) {
@@ -349,10 +370,11 @@ if ((Test-Path $botExe) -and (Test-Path $botConfig)) {
         Write-Log "Critical error launching PADLogger: $_" "Red"
     }
 } else {
-    Write-Log "ERROR: PADLogger.exe or config.json missing in $PSScriptRoot" "Red"
+    Write-Log "ERROR: PADLogger.exe or config.json missing in $SetupDir" "Red"
 }
+
 # ==========================================
-# 13. COMPLETION
+# 14. COMPLETION
 # ==========================================
 Write-Log "`n=== SETUP COMPLETE ===" "Green"
 Write-Log "Closing automatically in 5 seconds..." "Gray"
