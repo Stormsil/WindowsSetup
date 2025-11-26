@@ -1,5 +1,5 @@
 # ==========================================
-# MAIN CLOUD SETUP (LOGIC CORE)
+# Главная логика установки Windows
 # ==========================================
 # This script acts as the "Brain". It installs everything.
 # Network is assumed to be configured by Start.ps1.
