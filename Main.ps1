@@ -1,12 +1,10 @@
-# ==============================================================================
-# MAIN ORCHESTRATOR (FULL & PRIVATE REPO COMPATIBLE)
-# ==============================================================================
-# AUTHOR: Stormsil
-# REPO: WindowsSetup
-# VERSION: 3.1 (Full logic restored + Private Repo Patch)
-# ==============================================================================
+# ==========================================
+# Главная логика установки Windows
+# ==========================================
+# This script acts as the "Brain". It installs everything.
+# Network is assumed to be configured by Start.ps1.
 
-# 1. ПРИНИМАЕМ ТОКЕН ОТ BOOTSTRAPPER (Это единственное изменение в шапке)
+# 1. ПРИНИМАЕМ ТОКЕН ОТ BOOTSTRAPPER
 param(
     [string]$Token = ""
 )
@@ -14,9 +12,9 @@ param(
 # --- CONFIGURATION ---
 $GithubUser = "Stormsil"
 $RepoName   = "WindowsSetup"
-$ReleaseTag = "files"
-# ВАЖНО: Так как Bootstrapper запускает нас из папки System, используем текущий путь
-$SetupDir   = $PSScriptRoot 
+$ReleaseTag = "files" 
+# Используем текущую папку скрипта, так как он лежит в System
+$SetupDir   = $PSScriptRoot
 
 # ==========================================
 # -1. INIT
@@ -32,43 +30,36 @@ function Write-Log {
 Write-Log "=== MAIN SETUP LOGIC STARTED ===" "Cyan"
 
 if (-not $Token) {
-    Write-Log "WARNING: No GitHub Token provided! Downloads from Private Repo will fail." "Red"
+    Write-Log "WARNING: No GitHub Token provided! Private downloads will fail." "Red"
 }
 
-# Ensure setup directory exists (хотя мы уже в нем)
+# Create setup directory (if checking separate path)
 if (-not (Test-Path $SetupDir)) { New-Item -Path $SetupDir -ItemType Directory -Force | Out-Null }
 
 # ==========================================
-# 0. DYNAMIC DOWNLOAD (WEBCLIENT - PRIVATE ACCESS)
+# 0. DYNAMIC DOWNLOAD & UNZIP (S3 FIX)
 # ==========================================
 Write-Log "Connecting to GitHub API..." "Cyan"
 
 try {
-    # Для приватного репо нужны заголовки
+    # Заголовки для авторизации в API
     $Headers = @{
         "Authorization" = "token $Token"
         "User-Agent"    = "PowerShell-Setup"
     }
-    
+
     $ApiUrl = "https://api.github.com/repos/$GithubUser/$RepoName/releases/tags/$ReleaseTag"
     
     # Получаем список файлов
     $ReleaseData = Invoke-RestMethod -Uri $ApiUrl -Headers $Headers -UseBasicParsing
     
     if ($ReleaseData.assets.Count -gt 0) {
-        Write-Log "Found $($ReleaseData.assets.Count) files. Starting High-Speed Download..." "Green"
-        
-        # Создаем быстрый WebClient (аналог BITS по скорости, но работает с токенами)
-        $wc = New-Object System.Net.WebClient
-        $wc.Headers.Add("Authorization", "token $Token")
-        $wc.Headers.Add("User-Agent", "PowerShell-Setup")
-        $wc.Headers.Add("Accept", "application/octet-stream") # Магия для скачивания бинарников
+        Write-Log "Found $($ReleaseData.assets.Count) files. Starting Download..." "Green"
         
         foreach ($asset in $ReleaseData.assets) {
-            $FileName    = $asset.name
-            # В приватных репо используем 'url', а не 'browser_download_url'
-            $DownloadUrl = $asset.url 
-            $LocalPath   = Join-Path $SetupDir $FileName
+            $FileName = $asset.name
+            $ApiAssetUrl = $asset.url # Ссылка API (не прямая)
+            $LocalPath = Join-Path $SetupDir $FileName
             
             if ($FileName -match "Source code") { continue }
 
@@ -76,8 +67,38 @@ try {
                 Write-Log "Downloading: $FileName..." "Yellow"
                 
                 try {
-                    $wc.DownloadFile($DownloadUrl, $LocalPath)
-                    Write-Log "  -> Complete." "Gray"
+                    # --- S3 REDIRECT FIX START ---
+                    # 1. Запрашиваем ссылку у GitHub (с Токеном)
+                    $Req = [System.Net.HttpWebRequest]::Create($ApiAssetUrl)
+                    $Req.Method = "GET"
+                    $Req.Accept = "application/octet-stream"
+                    $Req.Headers.Add("Authorization", "token $Token")
+                    $Req.UserAgent = "PowerShell-Setup"
+                    $Req.AllowAutoRedirect = $false # Важно: не переходим сами
+                    
+                    try { 
+                        $Resp = $Req.GetResponse() 
+                    } catch { 
+                        $Resp = $_.Exception.Response 
+                    }
+
+                    # 2. Получаем реальную ссылку на Amazon S3
+                    $RealDownloadUrl = $null
+                    if ($Resp.StatusCode -eq [System.Net.HttpStatusCode]::Found -or $Resp.StatusCode -eq [System.Net.HttpStatusCode]::MovedPermanently) {
+                        $RealDownloadUrl = $Resp.GetResponseHeader("Location")
+                    }
+                    $Resp.Close()
+
+                    if ($RealDownloadUrl) {
+                        # 3. Качаем "чистым" клиентом без токена
+                        $wc = New-Object System.Net.WebClient
+                        $wc.DownloadFile($RealDownloadUrl, $LocalPath)
+                        Write-Log "  -> Complete." "Gray"
+                    } else {
+                        Write-Log "  -> Failed to resolve S3 link." "Red"
+                    }
+                    # --- S3 REDIRECT FIX END ---
+
                 } catch {
                     Write-Log "  -> Download Failed: $_" "Red"
                 }
@@ -90,7 +111,7 @@ try {
                 Write-Log "  -> Unzipping archive..." "Cyan"
                 try {
                     Expand-Archive -Path $LocalPath -DestinationPath $SetupDir -Force
-                    Remove-Item $LocalPath -Force 
+                    # Remove-Item $LocalPath -Force # Можно раскомментировать для удаления
                     Write-Log "  -> Extracted." "Green"
                 } catch {
                     Write-Log "  -> Extraction failed: $_" "Red"
@@ -102,18 +123,22 @@ try {
     }
 
 } catch {
-    Write-Log "API ERROR: Could not fetch release info. Check Token/User/Repo." "Red"
+    Write-Log "API ERROR: Could not fetch release info. Check User/Repo/Tag." "Red"
     Write-Log "Details: $_" "Red"
 }
 
 # ==========================================
 # 1. INSTALL VCREDIST (BATCH)
 # ==========================================
+# Запускаем install_all.bat, который вылетел из vcredist.zip
 $vcredistBat = Join-Path $SetupDir "vcredist\install_all.bat"
+# Fallback если распаковалось не в папку
+if (-not (Test-Path $vcredistBat)) { $vcredistBat = Join-Path $SetupDir "install_all.bat" }
 
 if (Test-Path $vcredistBat) {
     Write-Log "Installing VCRedist (AIO)..." "Cyan"
     try {
+        # -Verb RunAs запускает от имени админа (хотя скрипт и так админ, но на всякий случай)
         Start-Process -FilePath $vcredistBat -Verb RunAs -Wait
         Write-Log "  -> VCRedist installation complete." "Green"
     } catch {
@@ -124,7 +149,7 @@ if (Test-Path $vcredistBat) {
 }
 
 # ==========================================
-# 2. POWER SETTINGS
+# 1. POWER SETTINGS
 # ==========================================
 Write-Log "Applying High Performance power settings..." "Gray"
 try {
@@ -138,7 +163,7 @@ try {
 }
 
 # ==========================================
-# 3. ENVIRONMENT & CONSOLE TWEAKS
+# 2. ENVIRONMENT & CONSOLE TWEAKS
 # ==========================================
 Write-Log "Configuring environment variables..." "Gray"
 [Environment]::SetEnvironmentVariable("OPENCV_SKIP_CPU_BASELINE_CHECK", "1", "User")
@@ -148,10 +173,9 @@ if (-not (Test-Path $consolePath)) { New-Item $consolePath -Force | Out-Null }
 New-ItemProperty -Path $consolePath -Name "WindowSize" -Value 0x001E005A -PropertyType DWord -Force | Out-Null
 New-ItemProperty -Path $consolePath -Name "WindowPosition" -Value 0 -PropertyType DWord -Force | Out-Null
 New-ItemProperty -Path $consolePath -Name "ScreenBufferSize" -Value 0x2328005A -PropertyType DWord -Force | Out-Null
-New-ItemProperty -Path $consolePath -Name "QuickEdit" -Value 0 -PropertyType DWord -Force | Out-Null
 
 # ==========================================
-# 4. AUTO-LOGIN SETUP
+# 3. AUTO-LOGIN SETUP
 # ==========================================
 Write-Log "Setting up Auto-Login (User: Alex)..." "Gray"
 $winlogonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
@@ -164,7 +188,7 @@ New-ItemProperty -Path $winlogonPath -Name "DefaultUserName" -Value "Alex" -Prop
 New-ItemProperty -Path $winlogonPath -Name "DefaultPassword" -Value "1204" -PropertyType String -Force | Out-Null
 
 # ==========================================
-# 5. DISABLE NETWORK WIZARD
+# 4. DISABLE NETWORK WIZARD
 # ==========================================
 Write-Log "Disabling Network Location Wizard..." "Gray"
 $netPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff"
@@ -172,11 +196,12 @@ if (-not (Test-Path $netPath)) { New-Item $netPath -Force | Out-Null }
 New-ItemProperty -Path $netPath -Name "Default" -Value "" -PropertyType String -Force | Out-Null
 
 # ==========================================
-# 6. SYSTEM HARDENING
+# 5. SYSTEM HARDENING
 # ==========================================
 Write-Log "`n=== SYSTEM HARDENING ===" "Cyan"
 
-# --- 6a. WINDOWS UPDATE BLOCKER (WUB) ---
+# --- 5a. WINDOWS UPDATE BLOCKER (WUB) ---
+# We expect Wub_x64.exe to be present in C:\WindowsSetup
 $wubExe = Join-Path $SetupDir "Wub_x64.exe"
 
 if (Test-Path $wubExe) {
@@ -192,7 +217,7 @@ if (Test-Path $wubExe) {
 }
 
 # ==========================================
-# 7. PROFILE & SCHEDULER
+# 6. PROFILE & SCHEDULER
 # ==========================================
 Write-Log "Setting Network Profile to Public..." "Gray"
 Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Public -ErrorAction SilentlyContinue
@@ -210,7 +235,7 @@ try {
 } catch {}
 
 # ==========================================
-# 8. INSTALL CHOCOLATEY
+# 7. INSTALL CHOCOLATEY
 # ==========================================
 Write-Log "`n=== Software Installation ===" "Cyan"
 
@@ -225,11 +250,11 @@ if (-not (Get-Command "choco" -ErrorAction SilentlyContinue)) {
 }
 
 # ==========================================
-# 9. INSTALL LOCAL DRIVERS (DOWNLOADED BY LOADER)
+# 8. INSTALL LOCAL DRIVERS (DOWNLOADED BY LOADER)
 # ==========================================
 Write-Log "Installing Local Drivers..." "Yellow"
 
-# 9a. Trust Certificate (Tether)
+# 8a. Trust Certificate (Tether)
 $tetherPath = Join-Path $SetupDir "TetherDriverSetup.exe"
 if (Test-Path $tetherPath) {
     try {
@@ -242,33 +267,36 @@ if (Test-Path $tetherPath) {
     } catch {}
 }
 
-# 9b. Install List
+# 8b. Install List
+# IMPORTANT: These files must exist in C:\WindowsSetup
+# I updated filenames based on your Screenshot (Driver.exe, TSM.exe)
 $localInstallers = @(
-    @{ Name="Nvidia Driver";   Path="DriverSetup.exe";       Args="-s" },
-    @{ Name="Tether Driver";   Path="TetherDriverSetup.exe"; Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
-    @{ Name="TSM Application"; Path="TSMSetup.exe";          Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
-    @{ Name="NoMachine";       Path="NomachineSetup.exe";    Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
-    @{ Name="Proxifier";       Path="ProxifierSetup.exe";    Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
-    @{ Name="Resilio Sync";    Path="ResilioSetup.exe";      Args="/PERFORMINSTALL /S /NORUN" } 
+    @{ Name="Nvidia Driver";   Path=Join-Path $SetupDir "DriverSetup.exe";       Args="-s" },
+    @{ Name="Tether Driver";   Path=Join-Path $SetupDir "TetherDriverSetup.exe"; Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
+    @{ Name="TSM Application"; Path=Join-Path $SetupDir "TSMSetup.exe";          Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
+    @{ Name="NoMachine";     Path=Join-Path $SetupDir "NomachineSetup.exe";    Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
+    @{ Name="Proxifier";     Path=Join-Path $SetupDir "ProxifierSetup.exe";    Args="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" },
+    @{ Name="Resilio Sync";  Path=Join-Path $SetupDir "ResilioSetup.exe";      Args="/PERFORMINSTALL /S /NORUN" },
+    @{ Name="KMS Activator"; Path=Join-Path $SetupDir "KMSAuto++.x64.exe";     Args="/s /gui=no" }
 )
 
 foreach ($app in $localInstallers) {
-    $FullPath = Join-Path $SetupDir $app.Path
-    if (Test-Path $FullPath) {
+    if (Test-Path $app.Path) {
         Write-Log "Running $($app.Name)..." "Cyan"
         try {
-            $proc = Start-Process -FilePath $FullPath -ArgumentList $app.Args -Wait -PassThru -ErrorAction Stop
+            $proc = Start-Process -FilePath $app.Path -ArgumentList $app.Args -Wait -PassThru -ErrorAction Stop
             if ($proc.ExitCode -eq 0) { Write-Log "  -> Success." "Green" } 
             else { Write-Log "  -> Finished with code $($proc.ExitCode)." "Gray" }
         } catch { Write-Log "  -> ERROR: $_" "Red" }
     } else {
-        Write-Log "Skipping $($app.Name): File not found." "Gray"
+        Write-Log "Skipping $($app.Name): File not found ($($app.Path))." "Gray"
     }
 }
 
 # ==========================================
-# 10. INSTALL CHOCO APPS
+# 9. INSTALL CHOCO APPS
 # ==========================================
+# Proxifier removed (moved to local if needed), NoMachine is here
 $chocoApps = @(
     "dotnet-8.0-sdk",
     "webview2-runtime",
@@ -283,7 +311,7 @@ if (Get-Command "choco" -ErrorAction SilentlyContinue) {
 }
 
 # ==========================================
-# 11. CONFIGURE NOMACHINE (FULL PARSING)
+# 10. CONFIGURE NOMACHINE
 # ==========================================
 Write-Log "Configuring NoMachine..." "Yellow"
 $nodeCfgPath = "C:\Program Files\NoMachine\etc\node.cfg"
@@ -302,11 +330,9 @@ if (Test-Path $nodeCfgPath) {
         $newContent = @()
         $modified = $false
         
-        # Полный парсинг как в оригинале
         foreach ($line in $content) {
             $newLine = $line
             foreach ($key in $settings.Keys) {
-                # Регулярка для поиска ключа
                 if ($line -match "^\s*#?\s*$key\s+\d+") {
                     $newValue = "$key $($settings[$key])"
                     if ($line -ne $newValue) { $newLine = $newValue; $modified = $true }
@@ -320,21 +346,19 @@ if (Test-Path $nodeCfgPath) {
             Set-Content -Path $nodeCfgPath -Value $newContent
             Start-Service "nxserver" -ErrorAction SilentlyContinue
             Write-Log "  -> Config updated." "Green"
-        } else {
-            Write-Log "  -> Config already optimal." "Gray"
         }
     } catch { Write-Log "  -> Config Error: $_" "Red" }
 }
 
 # ==========================================
-# 12. INSTALL POWER AUTOMATE
+# 11. INSTALL POWER AUTOMATE (BITS -> WebClient)
 # ==========================================
 Write-Log "Installing Power Automate..." "Yellow"
 $padUrl = "https://go.microsoft.com/fwlink/?linkid=2102613"
 $padInstaller = "$env:TEMP\PADSetup.exe"
 
 try {
-    # Using WebClient instead of BITS for simplicity in Main
+    # Using WebClient for simpler handling
     (New-Object System.Net.WebClient).DownloadFile($padUrl, $padInstaller)
     Start-Process -FilePath $padInstaller -ArgumentList "-Silent", "-Install", "-ACCEPTEULA" -PassThru -Wait
     Remove-Item -Path $padInstaller -Force -ErrorAction SilentlyContinue
@@ -344,7 +368,7 @@ try {
 }
 
 # ==========================================
-# 13. START BOT (PADLogger)
+# 12. START BOT (PADLogger)
 # ==========================================
 Write-Log "`n=== Starting Auto-Login Bot ===" "Cyan"
 
@@ -372,9 +396,8 @@ if ((Test-Path $botExe) -and (Test-Path $botConfig)) {
 } else {
     Write-Log "ERROR: PADLogger.exe or config.json missing in $SetupDir" "Red"
 }
-
 # ==========================================
-# 14. COMPLETION
+# 13. COMPLETION
 # ==========================================
 Write-Log "`n=== SETUP COMPLETE ===" "Green"
 Write-Log "Closing automatically in 5 seconds..." "Gray"
