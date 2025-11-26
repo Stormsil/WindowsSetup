@@ -1,0 +1,6 @@
+{
+    "GithubUser": "Stormsil",
+    "RepoName": "WindowsSetup",
+    "ReleaseTag": "files",
+    "SilentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+}

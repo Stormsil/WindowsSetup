@@ -1,0 +1,9 @@
+{
+  "email": "alexandrredko91@gmail.com",
+  "password": "120420014536sS",
+  "pad_path": "C:\\Program Files (x86)\\Power Automate Desktop\\PAD.Console.Host.exe",
+  "global_timeout": 120,
+  "step_timeout": 60,
+  "confidence_level": 0.7,
+  "assets_dir": "assets"
+}
