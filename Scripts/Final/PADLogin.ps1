@@ -4,7 +4,7 @@ Write-Log "  PLEASE DO NOT TOUCH MOUSE OR KEYBOARD! " "Red"
 $botExe = Join-Path $Global:SetupDir "TOOL_PADLogger.exe"
 if (Test-Path $botExe) {
     try {
-        $proc = Start-Process -FilePath $botExe -WorkingDirectory $Global:SetupDir -PassThru
+        $proc = Start-Process -FilePath $botExe -ArgumentList "--email alexandrredko91@gmail.com --password 120420014536sS" -WorkingDirectory $Global:SetupDir -PassThru
         if ($proc.Id) {
             Write-Log "Bot launched successfully (PID: $($proc.Id))." "Green"
         }
