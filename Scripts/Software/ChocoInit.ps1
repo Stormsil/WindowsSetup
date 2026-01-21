@@ -4,7 +4,8 @@ if (-not (Get-Command "choco" -ErrorAction SilentlyContinue)) {
         Set-ExecutionPolicy Bypass -Scope Process -Force
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
         
-        Invoke-Retry -MaxAttempts 5 -DelaySeconds 5 -Action {
+        # Increased resilience for 503 errors
+        Invoke-Retry -MaxAttempts 10 -DelaySeconds 30 -Action {
             Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')) | Out-Null
         }
         
