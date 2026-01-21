@@ -18,7 +18,13 @@ if (-not $SetupConfig.choco_packages) {
 
 Write-Log "Starting Package Installation..." "Cyan"
 
+$totalPpkgs = $SetupConfig.choco_packages.Count
+$currentPkgIdx = 0
+
 foreach ($pkg in $SetupConfig.choco_packages) {
+    $currentPkgIdx++
+    Write-Progress -Activity "Installing Chocolatey Packages" -Status "Package: $pkg ($currentPkgIdx/$totalPpkgs)" -PercentComplete ([int]($currentPkgIdx / $totalPpkgs * 100))
+    
     Write-Host -NoNewline "[...] Checking $pkg ... " -ForegroundColor Gray
     
     # Check if installed (simple check)

@@ -38,17 +38,27 @@ else {
 
 # 3. EXECUTION PHASES
 $Phases = @("System", "Network", "Drivers", "Software", "Final")
+$TotalPhases = $Phases.Count
+$CurrentPhaseIdx = 0
 
 foreach ($Phase in $Phases) {
+    $CurrentPhaseIdx++
     Write-Header "PHASE: $Phase"
     
     $PhaseDir = Join-Path $SetupDir "Scripts\$Phase"
     if (Test-Path $PhaseDir) {
         $Scripts = Get-ChildItem -Path $PhaseDir -Filter "*.ps1" | Sort-Object Name
-        
+        $ScriptCount = $Scripts.Count
+        $CurrentScriptIdx = 0
+
         foreach ($Script in $Scripts) {
+            $CurrentScriptIdx++
             $TaskName = $Script.BaseName # e.g. "AutoLogin"
             
+            # Progress Bar
+            $PercentComplete = [int](($CurrentPhaseIdx - 1) / $TotalPhases * 100 + ($CurrentScriptIdx / $ScriptCount * (100 / $TotalPhases)))
+            Write-Progress -Activity "Windows Setup Progress" -Status "Phase: $Phase ($CurrentPhaseIdx/$TotalPhases)" -CurrentOperation "Running: $TaskName" -PercentComplete $PercentComplete
+
             # Tasks that handle their own state (Idempotent) - Safe to run every time
             $IdempotentTasks = @("ChocoPackages", "AutoLogin", "Privacy", "KMS")
 
@@ -78,6 +88,14 @@ foreach ($Phase in $Phases) {
 }
 
 # 4. COMPLETION
+Write-Progress -Activity "Windows Setup Progress" -Completed
 Write-Header "SETUP COMPLETE"
-Write-Log "Closing automatically in 5 seconds..." "Gray"
-Start-Sleep -Seconds 5
+Write-Log "All tasks finished. System will reboot in 10 seconds to apply all changes." "Yellow"
+
+# Final Countdown & Reboot
+for ($i = 10; $i -gt 0; $i--) {
+    Write-Log "Rebooting in $i..." "Gray"
+    Start-Sleep -Seconds 1
+}
+
+Restart-Computer -Force
