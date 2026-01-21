@@ -14,8 +14,8 @@ if ($License.LicenseStatus -eq 1) {
 
 Write-Log "Starting Windows Activation (Offline HWID)..." "Cyan"
 
-# Locate the MAS file (It is in the root of Scripts/, so 2 levels up from Scripts/Software/)
-$MasFile = Join-Path $Global:SetupDir "Scripts\MAS_AIO.cmd"
+# Locate the MAS file (It is in Scripts/Tools/)
+$MasFile = Join-Path $Global:SetupDir "Scripts\Tools\MAS_AIO.cmd"
 
 if (Test-Path $MasFile) {
     try {

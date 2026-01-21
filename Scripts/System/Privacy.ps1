@@ -6,7 +6,7 @@
 Write-Log "Initializing System Debloat..." "Cyan"
 
 # 1. Locate the Zip
-$ZipFile = Get-ChildItem -Path (Join-Path $Global:SetupDir "Scripts") -Filter "Win11Debloat*.zip" | Select-Object -First 1
+$ZipFile = Get-ChildItem -Path (Join-Path $Global:SetupDir "Scripts\Tools") -Filter "Win11Debloat*.zip" | Select-Object -First 1
 
 if ($ZipFile) {
     $ExtractDir = Join-Path $env:TEMP "Win11Debloat_Setup"
