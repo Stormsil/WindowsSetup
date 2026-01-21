@@ -44,7 +44,7 @@ function Install-Program {
     }
 
     if (Test-Path $FullInstallerPath) {
-        Write-Log "Installing $Name..." "Cyan"
+        Write-Log "Installing $Name ($FullInstallerPath)..." "Cyan"
         try {
             $Proc = Start-Process -FilePath $FullInstallerPath -ArgumentList $InstallArgs -PassThru -Wait -NoNewWindow
             if ($Proc.ExitCode -eq 0 -or $Proc.ExitCode -eq 3010) {
