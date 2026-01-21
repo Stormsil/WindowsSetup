@@ -72,6 +72,19 @@ function Invoke-Retry {
     }
 }
 
+function Get-SetupConfig {
+    $ConfigPath = Join-Path $Global:SetupDir "setup_config.json"
+    if (Test-Path $ConfigPath) {
+        try {
+            return Get-Content $ConfigPath -Raw | ConvertFrom-Json
+        } catch {
+            Write-Log "ERROR: Failed to parse setup_config.json: $_" "Red"
+            return $null
+        }
+    }
+    return $null
+}
+
 function Get-InstalledApp {
     param([string]$NamePattern)
     
@@ -87,4 +100,4 @@ function Get-InstalledApp {
     return $null
 }
 
-Export-ModuleMember -Function Install-Program, Invoke-Retry, Get-InstalledApp
+Export-ModuleMember -Function Install-Program, Invoke-Retry, Get-InstalledApp, Get-SetupConfig
