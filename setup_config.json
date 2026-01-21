@@ -2,5 +2,17 @@
     "GithubUser": "Stormsil",
     "RepoName": "WindowsSetup",
     "ReleaseTag": "files",
-    "SilentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+    "SilentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART",
+    "choco_packages": [
+        "dotnet-8.0-sdk",
+        "webview2-runtime",
+        "googlechrome",
+        "notepadplusplus",
+        "winrar"
+    ],
+    "system_user": {
+        "name": "User",
+        "password": "1204",
+        "autologin": true
+    }
 }

@@ -49,8 +49,11 @@ foreach ($Phase in $Phases) {
         foreach ($Script in $Scripts) {
             $TaskName = $Script.BaseName # e.g. "AutoLogin"
             
-            # Check State
-            if (Test-Task $TaskName) {
+            # Tasks that handle their own state (Idempotent) - Safe to run every time
+            $IdempotentTasks = @("ChocoPackages", "AutoLogin", "Privacy", "KMS")
+
+            # Check State (Skip if done AND not idempotent)
+            if ($TaskName -notin $IdempotentTasks -and (Test-Task $TaskName)) {
                 Write-Log "Skipping Task: $TaskName (Already Complete)." "Gray"
                 continue
             }
@@ -60,7 +63,7 @@ foreach ($Phase in $Phases) {
                 # Execute Script
                 & $Script.FullName
                 
-                # Mark Complete
+                # Mark Complete (Update timestamp/status)
                 Set-TaskComplete $TaskName
                 Write-Log "  -> Task '$TaskName' Complete." "Green"
             }

@@ -1,12 +1,49 @@
-$chocoApps = @(
-    "dotnet-8.0-sdk",
-    "webview2-runtime",
-    "googlechrome",  
-    "notepadplusplus",
-    "winrar"
-)
+# ==========================================
+# ROBUST CHOCOLATEY INSTALLER
+# ==========================================
+# Reads packages from setup_config.json
+# Installs them one by one, skipping failures without stopping the script.
 
-if (Get-Command "choco" -ErrorAction SilentlyContinue) {
-    Write-Log "Installing Choco Packages..." "Yellow"
-    choco upgrade $chocoApps -y --no-progress --stop-on-first-failure
+$SetupConfig = Get-SetupConfig
+
+if (-not (Get-Command "choco" -ErrorAction SilentlyContinue)) {
+    Write-Log "ERROR: Chocolatey not found! Skipping packages." "Red"
+    return
+}
+
+if (-not $SetupConfig.choco_packages) {
+    Write-Log "WARNING: No packages defined in setup_config.json" "Yellow"
+    return
+}
+
+Write-Log "Starting Package Installation..." "Cyan"
+
+foreach ($pkg in $SetupConfig.choco_packages) {
+    Write-Host -NoNewline "[...] Checking $pkg ... " -ForegroundColor Gray
+    
+    # Check if installed (simple check)
+    $isInstalled = choco list --local-only --exact $pkg --limit-output
+    
+    if ($isInstalled) {
+        Write-Host "INSTALLED" -ForegroundColor Green
+    } else {
+        Write-Host "INSTALLING" -ForegroundColor Cyan
+        
+        try {
+            # Run install with Retry
+            Invoke-Retry -MaxAttempts 3 -DelaySeconds 5 -Action {
+                $proc = Start-Process "choco" -ArgumentList "install $pkg -y --no-progress" -NoNewWindow -Wait -PassThru
+                
+                if ($proc.ExitCode -eq 0) {
+                    Write-Log "  -> $pkg Installed Successfully." "Green"
+                } elseif ($proc.ExitCode -eq 3010) {
+                    Write-Log "  -> $pkg Installed (Reboot Required)." "Yellow"
+                } else {
+                    throw "$pkg Failed (Exit Code: $($proc.ExitCode))"
+                }
+            }
+        } catch {
+            Write-Log "  -> Error installing $pkg: $_" "Red"
+        }
+    }
 }
