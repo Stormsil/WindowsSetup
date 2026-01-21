@@ -60,7 +60,7 @@ foreach ($Phase in $Phases) {
             Write-Progress -Activity "Windows Setup Progress" -Status "Phase: $Phase ($CurrentPhaseIdx/$TotalPhases)" -CurrentOperation "Running: $TaskName" -PercentComplete $PercentComplete
 
             # Tasks that handle their own state (Idempotent) - Safe to run every time
-            $IdempotentTasks = @("ChocoPackages", "AutoLogin", "Privacy", "KMS")
+            $IdempotentTasks = @("ChocoPackages", "AutoLogin", "Privacy", "MAS")
 
             # Check State (Skip if done AND not idempotent)
             if ($TaskName -notin $IdempotentTasks -and (Test-Task $TaskName)) {
