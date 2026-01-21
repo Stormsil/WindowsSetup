@@ -109,15 +109,19 @@ function Add-TrustedCertificate {
         Write-Log "Extracting certificate from EXE: $CertFile" "Gray"
         try {
             $Signature = Get-AuthenticodeSignature -FilePath $FullPath
-            if ($Signature.Status -eq 'Valid') {
+            if ($Signature.Status -eq 'Valid' -or $Signature.Status -eq 'Untrusted') {
                 $Cert = $Signature.SignerCertificate
-                $Store = [System.Security.Cryptography.X509Certificates.X509Store]::new("TrustedPublisher", "LocalMachine")
-                $Store.Open("ReadWrite")
-                $Store.Add($Cert)
-                $Store.Close()
-                Write-Log "  -> Certificate added to TrustedPublisher." "Green"
+                if ($Cert) {
+                    $Store = [System.Security.Cryptography.X509Certificates.X509Store]::new("TrustedPublisher", "LocalMachine")
+                    $Store.Open("ReadWrite")
+                    $Store.Add($Cert)
+                    $Store.Close()
+                    Write-Log "  -> Certificate added to TrustedPublisher." "Green"
+                } else {
+                    Write-Log "  -> No SignerCertificate found in signature." "Yellow"
+                }
             } else {
-                Write-Log "  -> EXE Signature Invalid or Missing." "Yellow"
+                Write-Log "  -> EXE Signature Status: $($Signature.Status)" "Yellow"
             }
         } catch {
             Write-Log "  -> Failed to import cert from EXE: $_" "Red"

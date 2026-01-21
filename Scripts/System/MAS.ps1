@@ -21,16 +21,19 @@ if (Test-Path $MasFile) {
     try {
         Write-Log "Launching MAS_AIO.cmd..." "Gray"
         
-        # Execute MAS directly with cmd /c and /HWID flag
-        # This prevents hanging on menu selection
-        $proc = Start-Process "cmd.exe" -ArgumentList "/c `"$MasFile`" /HWID" -PassThru -Wait -NoNewWindow
+        # Execute MAS directly using the call operator. 
+        # PowerShell handles the execution of .cmd files natively this way.
+        # We redirect StdOut/StdErr to Null to keep it silent if desired, or let it stream.
+        # Given user wants to debug, we let it stream but wrap in a process block if needed.
+        # Simplest robust method:
+        
+        $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$MasFile`" /HWID" -PassThru -Wait -NoNewWindow
         
         if ($proc.ExitCode -eq 0) {
-            Write-Log "Activation script executed." "Green"
+             Write-Log "Activation script executed." "Green"
         } else {
-            Write-Log "Activation script exited with code $($proc.ExitCode)." "Yellow"
+             Write-Log "Activation script exited with code $($proc.ExitCode)." "Yellow"
         }
-        
     } catch {
         Write-Log "Error executing MAS: $_" "Red"
     }
