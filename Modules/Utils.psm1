@@ -3,16 +3,25 @@ function Install-Program {
         [string]$Name,
         [string]$File,
         [string]$InstallArgs,
-        [string]$CheckPath = ""
+        [string]$CheckPath = "",
+        [string]$CheckRegistry = ""
     )
 
-    # 1. Declarative Check (Is it already installed?)
+    # 1. Declarative Check (Registry)
+    if ($CheckRegistry) {
+        if (Get-InstalledApp -NamePattern $CheckRegistry) {
+            Write-Log "Skipping $Name (Detected in Registry: $CheckRegistry)." "Green"
+            return
+        }
+    }
+
+    # 2. Declarative Check (File Path)
     if ($CheckPath -and (Test-Path $CheckPath)) {
         Write-Log "Skipping $Name (Already Installed at $CheckPath)." "Green"
         return
     }
 
-    # 2. Proceed with Install
+    # 3. Proceed with Install
     if (Test-Path $File) {
         Write-Log "Installing $Name..." "Cyan"
         try {
@@ -63,4 +72,19 @@ function Invoke-Retry {
     }
 }
 
-Export-ModuleMember -Function Install-Program, Invoke-Retry
+function Get-InstalledApp {
+    param([string]$NamePattern)
+    
+    $UninstallPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+    
+    foreach ($Path in $UninstallPaths) {
+        $Results = Get-ItemProperty $Path -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*$NamePattern*" }
+        if ($Results) { return $Results }
+    }
+    return $null
+}
+
+Export-ModuleMember -Function Install-Program, Invoke-Retry, Get-InstalledApp
