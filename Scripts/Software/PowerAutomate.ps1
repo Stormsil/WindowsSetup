@@ -3,7 +3,10 @@ $padUrl = "https://go.microsoft.com/fwlink/?linkid=2102613"
 $padInstaller = "$env:TEMP\PADSetup.exe"
 
 try {
-    (New-Object System.Net.WebClient).DownloadFile($padUrl, $padInstaller)
+    Invoke-Retry -MaxAttempts 3 -DelaySeconds 5 -Action {
+        (New-Object System.Net.WebClient).DownloadFile($padUrl, $padInstaller)
+    }
+    
     Start-Process -FilePath $padInstaller -ArgumentList "-Silent", "-Install", "-ACCEPTEULA" -PassThru -Wait
     Remove-Item -Path $padInstaller -Force -ErrorAction SilentlyContinue
     Write-Log "  -> Installed." "Green"
