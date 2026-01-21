@@ -21,10 +21,9 @@ if (Test-Path $MasFile) {
     try {
         Write-Log "Launching MAS_AIO.cmd..." "Gray"
         
-        # We use a trick: echo 1 | script to auto-select option 1 if HWID flag fails for some reason, 
-        # but MAS_AIO /HWID should be silent. We add 'start /b' or just call it directly.
-        $cmdArgs = "/c `"$MasFile`" /HWID"
-        $proc = Start-Process "cmd.exe" -ArgumentList $cmdArgs -Verb RunAs -PassThru -Wait -NoNewWindow
+        # Execute MAS directly with cmd /c and /HWID flag
+        # This prevents hanging on menu selection
+        $proc = Start-Process "cmd.exe" -ArgumentList "/c `"$MasFile`" /HWID" -Verb RunAs -PassThru -Wait -NoNewWindow
         
         if ($proc.ExitCode -eq 0) {
             Write-Log "Activation script executed." "Green"

@@ -38,7 +38,7 @@ foreach ($pkg in $SetupConfig.choco_packages) {
         try {
             # Run install with Retry
             Invoke-Retry -MaxAttempts 3 -DelaySeconds 5 -Action {
-                $proc = Start-Process "choco" -ArgumentList "install $pkg -y --no-progress" -NoNewWindow -Wait -PassThru
+                $proc = Start-Process "choco" -ArgumentList "install $pkg -y --no-progress --ignore-checksums" -NoNewWindow -Wait -PassThru
                 
                 if ($proc.ExitCode -eq 0) {
                     Write-Log "  -> $pkg Installed Successfully." "Green"

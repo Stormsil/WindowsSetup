@@ -90,12 +90,5 @@ foreach ($Phase in $Phases) {
 # 4. COMPLETION
 Write-Progress -Activity "Windows Setup Progress" -Completed
 Write-Header "SETUP COMPLETE"
-Write-Log "All tasks finished. System will reboot in 10 seconds to apply all changes." "Yellow"
-
-# Final Countdown & Reboot
-for ($i = 10; $i -gt 0; $i--) {
-    Write-Log "Rebooting in $i..." "Gray"
-    Start-Sleep -Seconds 1
-}
-
-Restart-Computer -Force
+Write-Log "All tasks finished." "Green"
+Write-Log "Leaving system running for final processes (e.g. PADLogin)." "Gray"

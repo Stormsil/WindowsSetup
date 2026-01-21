@@ -99,11 +99,38 @@ function Invoke-BatchFile {
 function Add-TrustedCertificate {
     param([string]$CertFile)
     $FullPath = Join-Path $Global:SetupDir $CertFile
-    if (Test-Path $FullPath) {
-        Write-Log "Importing Certificate: $CertFile" "Gray"
-        Import-Certificate -FilePath $FullPath -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+    
+    if (-not (Test-Path $FullPath)) {
+        Write-Log "Certificate/File not found: $FullPath" "Red"
+        return
+    }
+
+    if ($CertFile.EndsWith(".exe")) {
+        Write-Log "Extracting certificate from EXE: $CertFile" "Gray"
+        try {
+            $Signature = Get-AuthenticodeSignature -FilePath $FullPath
+            if ($Signature.Status -eq 'Valid') {
+                $Cert = $Signature.SignerCertificate
+                $Store = [System.Security.Cryptography.X509Certificates.X509Store]::new("TrustedPublisher", "LocalMachine")
+                $Store.Open("ReadWrite")
+                $Store.Add($Cert)
+                $Store.Close()
+                Write-Log "  -> Certificate added to TrustedPublisher." "Green"
+            } else {
+                Write-Log "  -> EXE Signature Invalid or Missing." "Yellow"
+            }
+        } catch {
+            Write-Log "  -> Failed to import cert from EXE: $_" "Red"
+        }
     } else {
-        Write-Log "Certificate not found: $FullPath" "Red"
+        # Default behavior for .cer/.crt
+        Write-Log "Importing Certificate: $CertFile" "Gray"
+        try {
+            Import-Certificate -FilePath $FullPath -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+            Write-Log "  -> Success." "Green"
+        } catch {
+             Write-Log "  -> Failed to import cert: $_" "Red"
+        }
     }
 }
 

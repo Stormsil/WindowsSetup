@@ -23,15 +23,14 @@ if ($ZipFile) {
         Write-Log "Running Win11Debloat..." "Cyan"
         
         # Arguments for Safe Privacy & Debloat
+        # -RunDefaultsLite: Standard clean without removing apps (user manages apps via other means)
         # -Silent: No prompts
-        # -DisableTelemetry: Stop spying
-        # -DisableBing: Remove Bing from Start
-        # -DisableSuggestions: No ads in Explorer/Start
-        $ArgsList = "-Silent -DisableTelemetry -DisableBing -DisableSuggestions -DisableLockscreenTips -DisableAds -DisableEdgeAds"
+        $ArgsList = "-RunDefaultsLite -Silent"
         
         try {
             # Execution
-            $Proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$($DebloatScript.FullName)`" $ArgsList" -Verb RunAs -PassThru -Wait
+            # Added WorkingDirectory to ensure script finds its config files
+            $Proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Unrestricted -File `"$($DebloatScript.FullName)`" $ArgsList" -Verb RunAs -PassThru -Wait -WorkingDirectory $ExtractDir
             
             if ($Proc.ExitCode -eq 0) {
                 Write-Log "Debloat applied successfully." "Green"
