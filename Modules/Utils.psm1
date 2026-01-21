@@ -2,9 +2,17 @@ function Install-Program {
     param(
         [string]$Name,
         [string]$File,
-        [string]$InstallArgs
+        [string]$InstallArgs,
+        [string]$CheckPath = ""
     )
 
+    # 1. Declarative Check (Is it already installed?)
+    if ($CheckPath -and (Test-Path $CheckPath)) {
+        Write-Log "Skipping $Name (Already Installed at $CheckPath)." "Green"
+        return
+    }
+
+    # 2. Proceed with Install
     if (Test-Path $File) {
         Write-Log "Installing $Name..." "Cyan"
         try {
@@ -17,6 +25,16 @@ function Install-Program {
             } else {
                 Write-Log "  -> Failed (Exit Code: $($Proc.ExitCode))." "Red"
             }
+            
+            # 3. Post-Install Verification
+            if ($CheckPath) {
+                if (Test-Path $CheckPath) {
+                    Write-Log "  -> Verification: File exists." "Green"
+                } else {
+                     Write-Log "  -> WARNING: Installation finished but target file not found ($CheckPath)." "Yellow"
+                }
+            }
+
         } catch {
             Write-Log "  -> Execution Failed: $_" "Red"
         }
