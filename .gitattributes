@@ -1,0 +1,6 @@
+# Force Windows line endings for batch scripts
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Force Windows line endings for PowerShell scripts (good practice)
+*.ps1 text eol=crlf
