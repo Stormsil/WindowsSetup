@@ -49,7 +49,7 @@ foreach ($pkg in $SetupConfig.choco_packages) {
                 }
             }
         } catch {
-            Write-Log "  -> Error installing $pkg: $_" "Red"
+            Write-Log "  -> Error installing $($pkg): $_" "Red"
         }
     }
 }

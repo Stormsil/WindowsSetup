@@ -21,13 +21,10 @@ if (Test-Path $MasFile) {
     try {
         Write-Log "Launching MAS_AIO.cmd..." "Gray"
         
-        # Launch CMD with /HWID argument for unattended activation
-        # Note: MAS AIO usually supports command line args if they are passed correctly.
-        # Standard offline MAS usage for HWID is often interactive, but let's try passing the arg.
-        # If the cmd doesn't support args directly, we might need a small wrapper, but usually it works or we rely on the script logic.
-        # According to documentation: MAS_AIO.cmd /HWID is supported.
-        
-        $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$MasFile`" /HWID" -Verb RunAs -PassThru -Wait -WindowStyle Hidden
+        # We use a trick: echo 1 | script to auto-select option 1 if HWID flag fails for some reason, 
+        # but MAS_AIO /HWID should be silent. We add 'start /b' or just call it directly.
+        $cmdArgs = "/c `"$MasFile`" /HWID"
+        $proc = Start-Process "cmd.exe" -ArgumentList $cmdArgs -Verb RunAs -PassThru -Wait -NoNewWindow
         
         if ($proc.ExitCode -eq 0) {
             Write-Log "Activation script executed." "Green"
