@@ -23,7 +23,7 @@ if (Test-Path $MasFile) {
         
         # Execute MAS directly with cmd /c and /HWID flag
         # This prevents hanging on menu selection
-        $proc = Start-Process "cmd.exe" -ArgumentList "/c `"$MasFile`" /HWID" -Verb RunAs -PassThru -Wait -NoNewWindow
+        $proc = Start-Process "cmd.exe" -ArgumentList "/c `"$MasFile`" /HWID" -PassThru -Wait -NoNewWindow
         
         if ($proc.ExitCode -eq 0) {
             Write-Log "Activation script executed." "Green"
