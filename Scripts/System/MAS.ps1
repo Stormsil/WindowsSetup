@@ -21,13 +21,8 @@ if (Test-Path $MasFile) {
     try {
         Write-Log "Launching MAS_AIO.cmd..." "Gray"
         
-        # Execute MAS directly using the call operator. 
-        # PowerShell handles the execution of .cmd files natively this way.
-        # We redirect StdOut/StdErr to Null to keep it silent if desired, or let it stream.
-        # Given user wants to debug, we let it stream but wrap in a process block if needed.
-        # Simplest robust method:
-        
-        $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$MasFile`" /HWID" -PassThru -Wait -NoNewWindow
+        # Execute MAS in a separate window to avoid breaking the main console UI.
+        $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$MasFile`" /HWID" -PassThru -Wait
         
         if ($proc.ExitCode -eq 0) {
              Write-Log "Activation script executed." "Green"
