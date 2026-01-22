@@ -36,11 +36,17 @@ function Install-Program {
         return
     }
 
-    # 3. Resolve Full Path to Installer (Ensure we look in the main SetupDir)
+    # 3. Resolve Full Path to Installer (Look in Root -> GitReleaseDownloaded -> Local)
     $FullInstallerPath = Join-Path $Global:SetupDir $File
     if (-not (Test-Path $FullInstallerPath)) {
-        # Fallback to local if not found in root
-        $FullInstallerPath = $File
+        # Check GitReleaseDownloaded folder
+        $DownloadPath = Join-Path $Global:SetupDir "GitReleaseDownloaded\$File"
+        if (Test-Path $DownloadPath) {
+            $FullInstallerPath = $DownloadPath
+        } else {
+            # Fallback to local if not found anywhere
+            $FullInstallerPath = $File
+        }
     }
 
     if (Test-Path $FullInstallerPath) {
@@ -88,6 +94,12 @@ function Invoke-Retry {
 function Invoke-BatchFile {
     param([string]$File)
     $FullPath = Join-Path $Global:SetupDir $File
+    
+    if (-not (Test-Path $FullPath)) {
+        $DownloadPath = Join-Path $Global:SetupDir "GitReleaseDownloaded\$File"
+        if (Test-Path $DownloadPath) { $FullPath = $DownloadPath }
+    }
+
     if (Test-Path $FullPath) {
         Write-Log "Executing Batch: $File" "Gray"
         Start-Process "cmd.exe" -ArgumentList "/c `"$FullPath`"" -Wait -NoNewWindow
@@ -101,8 +113,13 @@ function Add-TrustedCertificate {
     $FullPath = Join-Path $Global:SetupDir $CertFile
     
     if (-not (Test-Path $FullPath)) {
-        Write-Log "Certificate/File not found: $FullPath" "Red"
-        return
+        $DownloadPath = Join-Path $Global:SetupDir "GitReleaseDownloaded\$CertFile"
+        if (Test-Path $DownloadPath) { 
+            $FullPath = $DownloadPath 
+        } else {
+            Write-Log "Certificate/File not found: $FullPath" "Red"
+            return
+        }
     }
 
     if ($CertFile.EndsWith(".exe")) {
