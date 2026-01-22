@@ -31,7 +31,7 @@ function Invoke-GitHubDownload {
             }
 
             # Files to ignore (replaced by scripts)
-            $IgnoreList = @("TOOL_KMS.exe", "TOOL_OOSU.exe", "Source code")
+            $IgnoreList = @("TOOL_KMS.exe", "TOOL_OOSU.exe", "Source code", "APP_Resilio.exe", "DATA_ResilioSync.btskey")
 
             foreach ($asset in $ReleaseData.assets) {
                 $FileName = $asset.name
