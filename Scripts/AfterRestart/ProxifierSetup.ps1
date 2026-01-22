@@ -1,9 +1,9 @@
 <#
     Proxy Setup Manager (Fixed)
-    Исправления:
-    1. Принудительное закрытие Proxifier перед КАЖДЫМ запуском.
-    2. Увеличены паузы для надежности (реестр и закрытие).
-    3. Без кириллицы в логах.
+    Changes:
+    1. Forced Proxifier closure before every start.
+    2. Increased delays for registry and process sync.
+    3. Removed all Cyrillic and special characters for better compatibility.
 #>
 
 # --- CONFIGURATION ---
@@ -32,13 +32,13 @@ function Stop-Proxifier {
         Write-Host " Stopping Proxifier..." -ForegroundColor Yellow
         Stop-Process -Name $Global:Config.ProcessName -Force -ErrorAction SilentlyContinue
         
-        # Ждем, пока процесс реально исчезнет
+        # Wait for the process to actually exit
         $waited = 0
         while ((Get-Process -Name $Global:Config.ProcessName -ErrorAction SilentlyContinue) -and ($waited -lt 10)) {
             Start-Sleep -Milliseconds 200
             $waited++
         }
-        Write-Host "✓ Proxifier closed" -ForegroundColor Green
+        Write-Host " [OK] Proxifier closed" -ForegroundColor Green
     } else {
         Write-Host " Clean." -ForegroundColor Gray
     }
@@ -58,9 +58,8 @@ function Register-Proxifier {
         New-ItemProperty -Path $RegPath -Name "Key" -Value $LicenseKey -PropertyType String -Force | Out-Null
         New-ItemProperty -Path $RegPath -Name "Owner" -Value $LicenseKey -PropertyType String -Force | Out-Null
 
-        Write-Host "✓ License applied." -ForegroundColor Green
+        Write-Host " [OK] License applied." -ForegroundColor Green
         
-        # Пауза перед запуском, как просили
         Write-Host "Waiting 2 seconds..." -ForegroundColor Gray
         Start-Sleep -Seconds 2
     }
@@ -130,7 +129,6 @@ function Check-Proxy {
 function New-ProxifierProfile {
     param ($ProxyInfo)
 
-    # !!! ВАЖНО: Закрываем старый процесс перед записью файла !!!
     Stop-Proxifier
 
     Write-Host "Creating Profile..." -ForegroundColor Yellow
@@ -139,7 +137,6 @@ function New-ProxifierProfile {
         $dir = Split-Path $Global:ProfilePath
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
 
-        # Генерируем XML
         $xmlContent = @"
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <ProxifierProfile version="102" platform="Windows" product_id="0" product_minver="400">
@@ -187,16 +184,14 @@ function New-ProxifierProfile {
 "@
 
         Set-Content -Path $Global:ProfilePath -Value $xmlContent -Encoding UTF8
-        Write-Host "✓ Profile saved." -ForegroundColor Green
+        Write-Host " [OK] Profile saved." -ForegroundColor Green
         
-        # Применяем лицензию
         Register-Proxifier
 
-        # Запускаем
         Write-Host "Launching Proxifier..." -ForegroundColor Yellow
         Invoke-Item $Global:ProfilePath
         Start-Sleep -Seconds 1
-        Write-Host "✓ Done." -ForegroundColor Green
+        Write-Host " [OK] Done." -ForegroundColor Green
     }
     catch {
         Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
@@ -230,10 +225,10 @@ while ($true) {
     $score = Check-Proxy -ProxyInfo $proxyInfo
 
     if ($score -lt 30) {
-        Write-Host "`n✓ Good proxy. Setting up..." -ForegroundColor Green
+        Write-Host "`n [OK] Good proxy. Setting up..." -ForegroundColor Green
         New-ProxifierProfile -ProxyInfo $proxyInfo
     } else {
-        Write-Host "`n⚠ Fraud score $score. Skipping." -ForegroundColor Yellow
+        Write-Host "`n [!] Fraud score $score. Skipping." -ForegroundColor Yellow
     }
 }
 
