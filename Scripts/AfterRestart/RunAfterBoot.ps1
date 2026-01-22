@@ -52,5 +52,8 @@ Invoke-Step "SyncThingSetup.ps1" -Wait $true
 # 3. Proxifier
 Invoke-Step "ProxifierSetup.ps1" -Wait $true
 
+Write-Host "Cleaning up Scheduled Task..." -ForegroundColor Yellow
+Unregister-ScheduledTask -TaskName "WindowsSetup_PostBoot" -Confirm:$false -ErrorAction SilentlyContinue
+
 Write-Host "--- POST-REBOOT SETUP COMPLETE ---" -ForegroundColor Green
 Start-Sleep -Seconds 5

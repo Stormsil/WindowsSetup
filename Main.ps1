@@ -89,18 +89,27 @@ foreach ($Phase in $Phases) {
 
 # 4. COMPLETION & NEXT BOOT SETUP
 Write-Header "SETUP COMPLETE"
-Write-Log "Configuring Post-Reboot tasks..." "Cyan"
+Write-Log "Configuring Post-Reboot tasks (Scheduled Task)..." "Cyan"
 
 $AfterBootScript = Join-Path $SetupDir "Scripts\AfterRestart\RunAfterBoot.ps1"
 if (Test-Path $AfterBootScript) {
-    # Register RunOnce
-    $RunOnceKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
-    if (-not (Test-Path $RunOnceKey)) { New-Item $RunOnceKey -Force | Out-Null }
+    # Create Scheduled Task Action
+    $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$AfterBootScript`""
     
-    # We run powershell with -NoExit so the user sees the output, or just -File if it pauses itself
-    $Command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$AfterBootScript`""
-    Set-ItemProperty -Path $RunOnceKey -Name "WindowsSetup_AfterBoot" -Value $Command -Force
-    Write-Log "  -> Registered 'RunAfterBoot.ps1' for next login." "Green"
+    # Create Trigger (AtLogon)
+    $Trigger = New-ScheduledTaskTrigger -AtLogon
+    
+    # Create Principal (Run as Admin/System)
+    # Using specific user might be tricky if password is required, but running as "Users" group member with "RunLevel Highest" usually works for interactive session.
+    # However, for AutoLogin user, running as that user is best.
+    # Let's try running as the built-in Users group (interactive) with Elevation.
+    $Principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Administrators" -RunLevel Highest
+
+    # Register Task
+    $TaskName = "WindowsSetup_PostBoot"
+    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Force | Out-Null
+    
+    Write-Log "  -> Registered Scheduled Task '$TaskName' for next login." "Green"
 } else {
     Write-Log "  -> RunAfterBoot.ps1 not found!" "Red"
 }
