@@ -129,4 +129,4 @@ if ($check) {
 Write-Host "`n===================================================" -ForegroundColor Green
 Write-Host "DONE! Your VM is ready."
 Write-Host "==================================================="
-Read-Host "Press Enter to close..."
+Start-Sleep -Seconds 2

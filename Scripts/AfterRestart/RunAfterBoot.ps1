@@ -37,4 +37,4 @@ Invoke-Step "SyncThingSetup.ps1" -Wait $true
 Invoke-Step "ProxifierSetup.ps1" -Wait $true
 
 Write-Host "--- POST-REBOOT SETUP COMPLETE ---" -ForegroundColor Green
-Read-Host "Press Enter to exit..."
+Start-Sleep -Seconds 5

@@ -72,9 +72,14 @@ function Register-Proxifier {
 function Get-PublicIP {
     param ($HostName)
     try {
-        if ($HostName -match '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}') { return $HostName }
+        $HostName = $HostName.Trim()
+        if ($HostName -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') { return $HostName }
+        
         $ipObj = [System.Net.Dns]::GetHostAddresses($HostName)
-        return $ipObj[0].IPAddressToString
+        if ($ipObj -and $ipObj.Count -gt 0) {
+            return $ipObj[0].IPAddressToString
+        }
+        return $null
     } catch { return $null }
 }
 
@@ -216,10 +221,10 @@ while ($true) {
     }
 
     $proxyInfo = @{
-        Host     = $parts[0]
-        Port     = $parts[1]
-        Username = $parts[2]
-        Password = $parts[3]
+        Host     = $parts[0].Trim()
+        Port     = $parts[1].Trim()
+        Username = $parts[2].Trim()
+        Password = $parts[3].Trim()
     }
 
     $score = Check-Proxy -ProxyInfo $proxyInfo
