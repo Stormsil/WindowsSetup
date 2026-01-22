@@ -37,7 +37,7 @@ else {
 }
 
 # 3. EXECUTION PHASES
-$Phases = @("System", "Network", "Drivers", "Software", "Final")
+$Phases = @("System", "Network", "Drivers", "Software")
 $TotalPhases = $Phases.Count
 $CurrentPhaseIdx = 0
 
@@ -87,9 +87,25 @@ foreach ($Phase in $Phases) {
     }
 }
 
-# 4. COMPLETION
-Write-Progress -Activity "Windows Setup Progress" -Completed
+# 4. COMPLETION & NEXT BOOT SETUP
 Write-Header "SETUP COMPLETE"
+Write-Log "Configuring Post-Reboot tasks..." "Cyan"
+
+$AfterBootScript = Join-Path $SetupDir "Scripts\AfterRestart\RunAfterBoot.ps1"
+if (Test-Path $AfterBootScript) {
+    # Register RunOnce
+    $RunOnceKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+    if (-not (Test-Path $RunOnceKey)) { New-Item $RunOnceKey -Force | Out-Null }
+    
+    # We run powershell with -NoExit so the user sees the output, or just -File if it pauses itself
+    $Command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$AfterBootScript`""
+    Set-ItemProperty -Path $RunOnceKey -Name "WindowsSetup_AfterBoot" -Value $Command -Force
+    Write-Log "  -> Registered 'RunAfterBoot.ps1' for next login." "Green"
+} else {
+    Write-Log "  -> RunAfterBoot.ps1 not found!" "Red"
+}
+
+Write-Progress -Activity "Windows Setup Progress" -Completed
 Write-Log "All tasks finished. System will reboot in 10 seconds to apply all changes." "Yellow"
 
 # Final Countdown & Reboot

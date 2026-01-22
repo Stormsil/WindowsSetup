@@ -10,8 +10,9 @@ if (-not $SetupConfig.system_user.autologin) {
 
 $User = $SetupConfig.system_user.name
 $Pass = $SetupConfig.system_user.password
-# Убедитесь, что путь к утилите корректен. Обычно он лежит в Tools.
-$AutologonExe = "C:\WindowsSetup\System\Scripts\Tools\Autologon64.exe"
+# Determine Tools path relative to this script
+$ToolsDir = Join-Path (Split-Path $PSScriptRoot -Parent) "Tools"
+$AutologonExe = Join-Path $ToolsDir "Autologon64.exe"
 
 Write-Log "Configuring Auto-Login for user: $User" "Cyan"
 

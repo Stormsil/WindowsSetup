@@ -24,13 +24,19 @@ function Invoke-GitHubDownload {
         if ($ReleaseData.assets.Count -gt 0) {
             Write-Log "Found $($ReleaseData.assets.Count) files." "Green"
             
+            # Create dedicated download directory
+            $DownloadDir = Join-Path $DestDir "GitReleaseDownloaded"
+            if (-not (Test-Path $DownloadDir)) {
+                New-Item -ItemType Directory -Path $DownloadDir -Force | Out-Null
+            }
+
             # Files to ignore (replaced by scripts)
             $IgnoreList = @("TOOL_KMS.exe", "TOOL_OOSU.exe", "Source code")
 
             foreach ($asset in $ReleaseData.assets) {
                 $FileName = $asset.name
                 $ApiAssetUrl = $asset.url
-                $LocalPath = Join-Path $DestDir $FileName
+                $LocalPath = Join-Path $DownloadDir $FileName
                 $TempPath = "$LocalPath.tmp"
                 
                 # Check Ignore List
@@ -116,16 +122,13 @@ function Invoke-GitHubDownload {
             # ==============================================================================
             # CLEANUP / SYNC PHASE
             # ==============================================================================
-            Write-Log "Syncing: Checking for obsolete files..." "Cyan"
+            Write-Log "Syncing: Checking for obsolete files in GitReleaseDownloaded..." "Cyan"
             
             # 1. Build list of expected filenames from GitHub
             $ExpectedFiles = $ReleaseData.assets.name
             
-            # 2. Get local files that look like assets (Safety filter to protect Scripts/Config)
-            # Patterns based on your naming convention: APP_*, DRV_*, TOOL_*, SYS_*, DATA_*
-            $LocalResources = Get-ChildItem -Path $DestDir -File | Where-Object { 
-                $_.Name -match "^(APP|DRV|TOOL|SYS|DATA)_" 
-            }
+            # 2. Get local files in the download directory
+            $LocalResources = Get-ChildItem -Path $DownloadDir -File
 
             foreach ($File in $LocalResources) {
                 if ($File.Name -notin $ExpectedFiles) {

@@ -1,0 +1,8 @@
+.git/
+.gitattributes
+.gemini-clipboard/
+DevPush.ps1
+config.json
+.vs/
+*.log
+tmp/

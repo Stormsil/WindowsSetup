@@ -8,8 +8,9 @@
 Write-Log "Configuring Google Chrome as Default Browser (SetUserFTA)..." "Cyan"
 
 # 1. Setup Path to the tool
-# IMPORTANT: Ensure SetUserFTA.exe is actually in this folder!
-$ToolPath = "C:\WindowsSetup\System\Scripts\Tools\SetUserFTA.exe"
+# Relative path: Up one level from Software/ -> Scripts/, then down to Tools/
+$ToolsDir = Join-Path (Split-Path $PSScriptRoot -Parent) "Tools"
+$ToolPath = Join-Path $ToolsDir "SetUserFTA.exe"
 
 # 2. Check for Chrome Path
 $ChromePath = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe"
