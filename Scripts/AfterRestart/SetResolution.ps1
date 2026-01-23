@@ -56,53 +56,44 @@ function Set-ScreenResolution {
     $devMode = New-Object DisplayTools+DEVMODE
     $devMode.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($devMode)
 
-    # 1. Try to find the exact mode we want (1920x1080, 32-bit, 60Hz)
-    $modeNum = 0
-    $found = $false
-    
-    while ([DisplayTools]::EnumDisplaySettings($null, $modeNum, [ref]$devMode)) {
-        if ($devMode.dmPelsWidth -eq $Width -and 
-            $devMode.dmPelsHeight -eq $Height -and 
-            $devMode.dmBitsPerPel -eq 32 -and
-            $devMode.dmDisplayFrequency -eq 60) {
-            
-            $found = $true
-            break
-        }
-        $modeNum++
-    }
+    Write-Host "Attempting to set resolution to ${Width}x${Height}..." -ForegroundColor Cyan
 
-    # 2. If exact match not found, try just Resolution
-    if (-not $found) {
-        $modeNum = 0
-        while ([DisplayTools]::EnumDisplaySettings($null, $modeNum, [ref]$devMode)) {
-            if ($devMode.dmPelsWidth -eq $Width -and $devMode.dmPelsHeight -eq $Height) {
-                $found = $true
-                break
-            }
-            $modeNum++
-        }
-    }
+    # 1. Get Current Settings to populate the struct basics (Device Name, etc.)
+    # -1 = ENUM_CURRENT_SETTINGS
+    if ([DisplayTools]::EnumDisplaySettings($null, -1, [ref]$devMode)) {
+        
+        Write-Host "Current Resolution: $($devMode.dmPelsWidth)x$($devMode.dmPelsHeight)" -ForegroundColor Gray
 
-    if ($found) {
+        # 2. Modify just the resolution fields
+        $devMode.dmPelsWidth = $Width
+        $devMode.dmPelsHeight = $Height
+        
+        # DM_PELSWIDTH (0x80000) | DM_PELSHEIGHT (0x100000)
+        $devMode.dmFields = 0x80000 -bor 0x100000 
+
+        # 3. Apply
         # CDS_UPDATEREGISTRY = 0x01
-        $result = [DisplayTools]::ChangeDisplaySettings([ref]$devMode, 1)
+        $result = [DisplayTools]::ChangeDisplaySettings([ref]$devMode, 0)
         
         switch ($result) {
             0 { Write-Host "Success: Resolution set to ${Width}x${Height}" -ForegroundColor Green }
             1 { Write-Host "Error: Restart required." -ForegroundColor Yellow }
-            -2 { Write-Host "Error: Mode not supported." -ForegroundColor Red }
+            -2 { Write-Host "Error: Mode not supported (Try checking Refresh Rate)." -ForegroundColor Red }
             default { Write-Host "Error: ChangeDisplaySettings failed code $result" -ForegroundColor Red }
         }
     } else {
-        Write-Host "Error: The resolution ${Width}x${Height} is not supported by this monitor/driver." -ForegroundColor Red
-        # List a few supported ones for debugging
-        Write-Host "Supported modes sample:" -ForegroundColor Gray
-        $devMode = New-Object DisplayTools+DEVMODE
-        $devMode.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($devMode)
-        for ($i=0; $i -lt 5; $i++) {
-            if ([DisplayTools]::EnumDisplaySettings($null, $i, [ref]$devMode)) {
-                Write-Host "  - $($devMode.dmPelsWidth)x$($devMode.dmPelsHeight)" -ForegroundColor Gray
+        Write-Host "CRITICAL ERROR: Failed to enumerate CURRENT display settings." -ForegroundColor Red
+        Write-Host "This usually means the P/Invoke struct is mismatched or no display driver is active." -ForegroundColor Red
+        
+        # Fallback: Try to list what IS supported
+        Write-Host "`nListing first 5 available modes (Index 0-4):" -ForegroundColor Gray
+        for ($i = 0; $i -lt 5; $i++) {
+            $dm = New-Object DisplayTools+DEVMODE
+            $dm.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($dm)
+            if ([DisplayTools]::EnumDisplaySettings($null, $i, [ref]$dm)) {
+                Write-Host "  [$i] $($dm.dmPelsWidth)x$($dm.dmPelsHeight) @ $($dm.dmDisplayFrequency)Hz" -ForegroundColor Gray
+            } else {
+                 Write-Host "  [$i] Enum failed." -ForegroundColor DarkGray
             }
         }
     }
