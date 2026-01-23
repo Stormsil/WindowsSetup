@@ -42,15 +42,26 @@ Write-Host "--- POST-REBOOT SETUP STARTED ---" -ForegroundColor Green
 # 0. Re-Run AutoLogin (Ensure it sticks)
 Invoke-Step "AutoLogin.ps1" -Wait $true
 
-# 1. Wait 45 Seconds as requested (Allow system/services to stabilize)
-Write-Host "Waiting 45 seconds for system load..." -ForegroundColor Yellow
-Start-Sleep -Seconds 45
+# 1. Wait (Skipped as requested)
+# Write-Host "Waiting 45 seconds for system load..." -ForegroundColor Yellow
+# Start-Sleep -Seconds 45
 
 # 2. SyncThing
 Invoke-Step "SyncThingSetup.ps1" -Wait $true
 
 # 3. Proxifier
 Invoke-Step "ProxifierSetup.ps1" -Wait $true
+
+# 4. Eject Setup Drive (D:)
+try {
+    Write-Host "Ejecting Drive D:..." -ForegroundColor Yellow
+    $driveLetter = "D:"
+    $eject = New-Object -ComObject Shell.Application
+    $eject.Namespace(17).ParseName($driveLetter).InvokeVerb("Eject")
+    Write-Host "  -> Eject command sent." -ForegroundColor Green
+} catch {
+    Write-Host "  -> Failed to eject D: (might not exist or be in use)." -ForegroundColor Gray
+}
 
 Write-Host "Cleaning up Scheduled Task..." -ForegroundColor Yellow
 Unregister-ScheduledTask -TaskName "WindowsSetup_PostBoot" -Confirm:$false -ErrorAction SilentlyContinue
