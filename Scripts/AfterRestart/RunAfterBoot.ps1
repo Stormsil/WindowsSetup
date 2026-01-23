@@ -13,17 +13,22 @@ Import-Module (Join-Path $Global:SetupDir "Modules\Utils.psm1") -Force
 Import-Module (Join-Path $Global:SetupDir "Modules\StateManager.psm1") -Force
 
 Write-Header "POST-REBOOT SETUP STARTED"
+Write-Log "State File: $(Get-StateFilePath)" "Gray"
+
+$AllStepsSuccess = $true
 
 # Function to run a script safely with state check
 function Invoke-Step {
     param(
-        [string]$ScriptName, 
+        [string]$ScriptName, # Filename with extension e.g. "AutoLogin.ps1"
         [bool]$Wait = $true,
         [bool]$Force = $false # If true, ignores state
     )
 
-    if (-not $Force -and (Test-Task $ScriptName)) {
-        Write-Log "Skipping Task: $ScriptName (Already Complete)." "Gray"
+    $TaskKey = [System.IO.Path]::GetFileNameWithoutExtension($ScriptName)
+
+    if (-not $Force -and (Test-Task $TaskKey)) {
+        Write-Log "Skipping Task: $TaskKey (Already Complete)." "Gray"
         return
     }
     
@@ -34,25 +39,28 @@ function Invoke-Step {
     }
 
     if (Test-Path $Path) {
-        Write-Log "Running Post-Boot Task: $ScriptName..." "Cyan"
+        Write-Log "Running Post-Boot Task: $TaskKey..." "Cyan"
         try {
             if ($Wait) {
                 & $Path
                 if ($LASTEXITCODE -eq 0 -or $?) {
-                    Set-TaskComplete $ScriptName
-                    Write-Log "  -> Task '$ScriptName' Complete." "Green"
+                    Set-TaskComplete $TaskKey
+                    Write-Log "  -> Task '$TaskKey' Complete." "Green"
                 } else {
-                    Write-Log "  -> Task '$ScriptName' reported failure." "Red"
+                    Write-Log "  -> Task '$TaskKey' reported failure." "Red"
+                    $script:AllStepsSuccess = $false
                 }
             } else {
                 Start-Process powershell.exe -ArgumentList "-NoExit", "-File `"$Path`""
-                Set-TaskComplete $ScriptName # Mark complete if we fired and forgot? Usually better to wait.
+                Set-TaskComplete $TaskKey 
             }
         } catch {
-            Write-Log "  -> Error running '$ScriptName': $_" "Red"
+            Write-Log "  -> Error running '$TaskKey': $_" "Red"
+            $script:AllStepsSuccess = $false
         }
     } else {
         Write-Log "Script not found: $ScriptName" "Red"
+        $script:AllStepsSuccess = $false
     }
 }
 
@@ -94,16 +102,14 @@ Invoke-Step "SyncThingSetup.ps1"
 # 6. Proxifier (ALWAYS LAST)
 Invoke-Step "ProxifierSetup.ps1"
 
-# Cleanup Scheduled Task if everything finished successfully?
-# Only if we want to stop it running on NEXT boot. 
-# But the user might want 'idempotency' on every boot?
-# "RunAfterBoot acts as the orchestrator".
-# If we unregister, it won't run again.
-# The user said: "if I decide to add a new script... I want to press START... it re-downloads... then runs new scripts".
-# This implies 'RunAfterBoot' is triggered by 'Main.ps1' manually, OR automatically at boot.
-# If 'Main.ps1' registers the task, it runs at boot.
-# I will NOT unregister it automatically, so it can handle future updates if the user reboots.
-# OR, if the user runs 'Start' (Main.ps1), it manually invokes this script too.
+# Cleanup Scheduled Task if everything finished successfully
+if ($AllStepsSuccess) {
+    Write-Log "All post-boot tasks completed successfully." "Green"
+    Write-Log "Unregistering startup task..." "Cyan"
+    Unregister-ScheduledTask -TaskName "WindowsSetup_PostBoot" -Confirm:$false -ErrorAction SilentlyContinue
+} else {
+    Write-Log "Some tasks failed. Startup task retained for next retry." "Yellow"
+}
 
 Write-Header "POST-REBOOT SETUP COMPLETE"
 Start-Sleep -Seconds 3
