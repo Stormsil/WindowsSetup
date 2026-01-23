@@ -56,4 +56,4 @@ function Reset-State {
     if (Test-Path $path) { Remove-Item -Path $path -Force }
 }
 
-Export-ModuleMember -Function Test-Task, Set-TaskComplete, Reset-State
+Export-ModuleMember -Function Test-Task, Set-TaskComplete, Reset-State, Get-StateFilePath

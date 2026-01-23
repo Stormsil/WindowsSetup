@@ -2,7 +2,7 @@ Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 
-public class Display {
+public class DisplayTools {
     [DllImport("user32.dll")]
     public static extern int ChangeDisplaySettings(ref DEVMODE devMode, int flags);
 
@@ -11,7 +11,7 @@ public class Display {
 
     [StructLayout(LayoutKind.Sequential)]
     public struct DEVMODE {
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 0x20)]
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
         public string dmDeviceName;
         public short dmSpecVersion;
         public short dmDriverVersion;
@@ -27,7 +27,7 @@ public class Display {
         public short dmYResolution;
         public short dmTTOption;
         public short dmCollate;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 0x20)]
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
         public string dmFormName;
         public short dmLogPixels;
         public int dmBitsPerPel;
@@ -47,29 +47,65 @@ public class Display {
 }
 "@
 
-function Set-Resolution {
+function Set-ScreenResolution {
     param (
         [int]$Width = 1920,
         [int]$Height = 1080
     )
 
-    $devMode = New-Object Display+DEVMODE
+    $devMode = New-Object DisplayTools+DEVMODE
     $devMode.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($devMode)
 
-    if ([Display]::EnumDisplaySettings($null, -1, [ref]$devMode)) {
-        $devMode.dmPelsWidth = $Width
-        $devMode.dmPelsHeight = $Height
-        $devMode.dmFields = 0x80000 -bor 0x100000 # DM_PELSWIDTH | DM_PELSHEIGHT
+    # 1. Try to find the exact mode we want (1920x1080, 32-bit, 60Hz)
+    $modeNum = 0
+    $found = $false
+    
+    while ([DisplayTools]::EnumDisplaySettings($null, $modeNum, [ref]$devMode)) {
+        if ($devMode.dmPelsWidth -eq $Width -and 
+            $devMode.dmPelsHeight -eq $Height -and 
+            $devMode.dmBitsPerPel -eq 32 -and
+            $devMode.dmDisplayFrequency -eq 60) {
+            
+            $found = $true
+            break
+        }
+        $modeNum++
+    }
 
-        $result = [Display]::ChangeDisplaySettings([ref]$devMode, 0)
-        if ($result -eq 0) {
-            Write-Host "Resolution set to ${Width}x${Height}" -ForegroundColor Green
-        } else {
-            Write-Host "Failed to change resolution. Error code: $result" -ForegroundColor Red
+    # 2. If exact match not found, try just Resolution
+    if (-not $found) {
+        $modeNum = 0
+        while ([DisplayTools]::EnumDisplaySettings($null, $modeNum, [ref]$devMode)) {
+            if ($devMode.dmPelsWidth -eq $Width -and $devMode.dmPelsHeight -eq $Height) {
+                $found = $true
+                break
+            }
+            $modeNum++
+        }
+    }
+
+    if ($found) {
+        # CDS_UPDATEREGISTRY = 0x01
+        $result = [DisplayTools]::ChangeDisplaySettings([ref]$devMode, 1)
+        
+        switch ($result) {
+            0 { Write-Host "Success: Resolution set to ${Width}x${Height}" -ForegroundColor Green }
+            1 { Write-Host "Error: Restart required." -ForegroundColor Yellow }
+            -2 { Write-Host "Error: Mode not supported." -ForegroundColor Red }
+            default { Write-Host "Error: ChangeDisplaySettings failed code $result" -ForegroundColor Red }
         }
     } else {
-        Write-Host "Failed to enumerate display settings." -ForegroundColor Red
+        Write-Host "Error: The resolution ${Width}x${Height} is not supported by this monitor/driver." -ForegroundColor Red
+        # List a few supported ones for debugging
+        Write-Host "Supported modes sample:" -ForegroundColor Gray
+        $devMode = New-Object DisplayTools+DEVMODE
+        $devMode.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($devMode)
+        for ($i=0; $i -lt 5; $i++) {
+            if ([DisplayTools]::EnumDisplaySettings($null, $i, [ref]$devMode)) {
+                Write-Host "  - $($devMode.dmPelsWidth)x$($devMode.dmPelsHeight)" -ForegroundColor Gray
+            }
+        }
     }
 }
 
-Set-Resolution -Width 1920 -Height 1080
+Set-ScreenResolution -Width 1920 -Height 1080
