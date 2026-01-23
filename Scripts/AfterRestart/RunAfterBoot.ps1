@@ -70,26 +70,11 @@ Invoke-Step "AutoLogin.ps1"
 # 2. System Configuration (Resolution, Date, etc.)
 Invoke-Step "FakeInstallDate.ps1"
 Invoke-Step "SetResolution.ps1"
-
-# 3. Disk Ejection (Logic wrapped as task)
-if (-not (Test-Task "DiskEject")) {
-    try {
-        Write-Log "Attempting to Eject Drive D:..." "Yellow"
-        $driveLetter = "D:"
-        $eject = New-Object -ComObject Shell.Application
-        $eject.Namespace(17).ParseName($driveLetter).InvokeVerb("Eject")
-        Write-Log "  -> Eject command sent." "Green"
-        Set-TaskComplete "DiskEject"
-    } catch {
-        Write-Log "  -> Failed to eject D: (might not exist or be in use)." "Gray"
-    }
-} else {
-    Write-Log "Skipping Task: DiskEject (Already Complete)." "Gray"
-}
+Invoke-Step "EjectDrive.ps1"
 
 # 4. Run any "Other" scripts in this folder that are not explicitly ordered
 # Exclude known ones
-$Excluded = @("RunAfterBoot.ps1", "AutoLogin.ps1", "FakeInstallDate.ps1", "SetResolution.ps1", "SyncThingSetup.ps1", "ProxifierSetup.ps1")
+$Excluded = @("RunAfterBoot.ps1", "AutoLogin.ps1", "FakeInstallDate.ps1", "SetResolution.ps1", "EjectDrive.ps1", "SyncThingSetup.ps1", "ProxifierSetup.ps1")
 $OtherScripts = Get-ChildItem -Path $ScriptDir -Filter "*.ps1" | Where-Object { $_.Name -notin $Excluded } | Sort-Object Name
 
 foreach ($Script in $OtherScripts) {
