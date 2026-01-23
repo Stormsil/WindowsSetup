@@ -11,7 +11,23 @@ function Get-StateFilePath {
 function Get-State {
     $path = Get-StateFilePath
     if (Test-Path $path) {
-        return Get-Content -Path $path -Raw | ConvertFrom-Json -AsHashtable
+        try {
+            $json = Get-Content -Path $path -Raw
+            if ([string]::IsNullOrWhiteSpace($json)) { return @{} }
+            
+            $obj = $json | ConvertFrom-Json
+            
+            # Convert PSCustomObject to Hashtable for PS 5.1 compatibility
+            $hash = @{}
+            if ($obj) {
+                $obj.PSObject.Properties | ForEach-Object {
+                    $hash[$_.Name] = $_.Value
+                }
+            }
+            return $hash
+        } catch {
+            return @{}
+        }
     }
     return @{}
 }
