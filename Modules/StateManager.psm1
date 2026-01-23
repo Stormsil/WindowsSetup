@@ -1,20 +1,43 @@
-$StatePath = "HKLM:\SOFTWARE\WindowsSetup\State"
+function Get-StateFilePath {
+    if ($Global:SetupDir) {
+        # Store state in the PARENT directory of the repo (e.g., C:\WindowsSetup\)
+        # This allows the repo folder (C:\WindowsSetup\System) to be wiped/updated without losing state.
+        return Join-Path (Split-Path $Global:SetupDir -Parent) ".setup_state.json"
+    }
+    # Fallback for testing/undefined
+    return Join-Path $PSScriptRoot "..\..\.setup_state.json"
+}
+
+function Get-State {
+    $path = Get-StateFilePath
+    if (Test-Path $path) {
+        return Get-Content -Path $path -Raw | ConvertFrom-Json -AsHashtable
+    }
+    return @{}
+}
+
+function Save-State {
+    param($State)
+    $path = Get-StateFilePath
+    $State | ConvertTo-Json -Depth 2 | Set-Content -Path $path -Force
+}
 
 function Test-Task {
     param([string]$TaskName)
-    if (-not (Test-Path $StatePath)) { return $false }
-    $val = Get-ItemProperty -Path $StatePath -Name $TaskName -ErrorAction SilentlyContinue
-    return ($null -ne $val)
+    $State = Get-State
+    return ($State.ContainsKey($TaskName) -and $State[$TaskName] -eq $true)
 }
 
 function Set-TaskComplete {
     param([string]$TaskName)
-    if (-not (Test-Path $StatePath)) { New-Item -Path $StatePath -Force | Out-Null }
-    New-ItemProperty -Path $StatePath -Name $TaskName -Value 1 -PropertyType DWord -Force | Out-Null
+    $State = Get-State
+    $State[$TaskName] = $true
+    Save-State -State $State
 }
 
 function Reset-State {
-    if (Test-Path $StatePath) { Remove-Item -Path $StatePath -Recurse -Force }
+    $path = Get-StateFilePath
+    if (Test-Path $path) { Remove-Item -Path $path -Force }
 }
 
 Export-ModuleMember -Function Test-Task, Set-TaskComplete, Reset-State

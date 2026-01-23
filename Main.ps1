@@ -37,90 +37,104 @@ else {
 }
 
 # 3. EXECUTION PHASES
-$Phases = @("System", "Network", "Drivers", "Software")
-$TotalPhases = $Phases.Count
-$CurrentPhaseIdx = 0
+if (-not (Test-Task "MainSetup")) {
+    $Phases = @("System", "Network", "Drivers", "Software")
+    $TotalPhases = $Phases.Count
+    $CurrentPhaseIdx = 0
 
-foreach ($Phase in $Phases) {
-    $CurrentPhaseIdx++
-    Write-Header "PHASE: $Phase"
-    
-    $PhaseDir = Join-Path $SetupDir "Scripts\$Phase"
-    if (Test-Path $PhaseDir) {
-        $Scripts = Get-ChildItem -Path $PhaseDir -Filter "*.ps1" | Sort-Object Name
-        $ScriptCount = $Scripts.Count
-        $CurrentScriptIdx = 0
+    foreach ($Phase in $Phases) {
+        $CurrentPhaseIdx++
+        Write-Header "PHASE: $Phase"
+        
+        $PhaseDir = Join-Path $SetupDir "Scripts\$Phase"
+        if (Test-Path $PhaseDir) {
+            $Scripts = Get-ChildItem -Path $PhaseDir -Filter "*.ps1" | Sort-Object Name
+            $ScriptCount = $Scripts.Count
+            $CurrentScriptIdx = 0
 
-        foreach ($Script in $Scripts) {
-            $CurrentScriptIdx++
-            $TaskName = $Script.BaseName # e.g. "AutoLogin"
-            
-            # Progress Bar
-            $PercentComplete = [int](($CurrentPhaseIdx - 1) / $TotalPhases * 100 + ($CurrentScriptIdx / $ScriptCount * (100 / $TotalPhases)))
-            Write-Progress -Activity "Windows Setup Progress" -Status "Phase: $Phase ($CurrentPhaseIdx/$TotalPhases)" -CurrentOperation "Running: $TaskName" -PercentComplete $PercentComplete
-
-            # Tasks that handle their own state (Idempotent) - Safe to run every time
-            $IdempotentTasks = @("ChocoPackages", "AutoLogin", "Privacy", "MAS")
-
-            # Check State (Skip if done AND not idempotent)
-            if ($TaskName -notin $IdempotentTasks -and (Test-Task $TaskName)) {
-                Write-Log "Skipping Task: $TaskName (Already Complete)." "Gray"
-                continue
-            }
-            
-            Write-Log "Running Task: $TaskName..." "Cyan"
-            try {
-                # Execute Script
-                & $Script.FullName
+            foreach ($Script in $Scripts) {
+                $CurrentScriptIdx++
+                $TaskName = $Script.BaseName # e.g. "AutoLogin"
                 
-                # Mark Complete (Update timestamp/status)
-                Set-TaskComplete $TaskName
-                Write-Log "  -> Task '$TaskName' Complete." "Green"
-            }
-            catch {
-                Write-Log "  -> Task '$TaskName' FAILED: $_" "Red"
+                # Progress Bar
+                $PercentComplete = [int](($CurrentPhaseIdx - 1) / $TotalPhases * 100 + ($CurrentScriptIdx / $ScriptCount * (100 / $TotalPhases)))
+                Write-Progress -Activity "Windows Setup Progress" -Status "Phase: $Phase ($CurrentPhaseIdx/$TotalPhases)" -CurrentOperation "Running: $TaskName" -PercentComplete $PercentComplete
+
+                # Tasks that handle their own state (Idempotent) - Safe to run every time
+                $IdempotentTasks = @("ChocoPackages", "AutoLogin", "Privacy", "MAS")
+
+                # Check State (Skip if done AND not idempotent)
+                if ($TaskName -notin $IdempotentTasks -and (Test-Task $TaskName)) {
+                    Write-Log "Skipping Task: $TaskName (Already Complete)." "Gray"
+                    continue
+                }
+                
+                Write-Log "Running Task: $TaskName..." "Cyan"
+                try {
+                    # Execute Script
+                    & $Script.FullName
+                    
+                    # Mark Complete (Update timestamp/status)
+                    Set-TaskComplete $TaskName
+                    Write-Log "  -> Task '$TaskName' Complete." "Green"
+                }
+                catch {
+                    Write-Log "  -> Task '$TaskName' FAILED: $_" "Red"
+                }
             }
         }
+        else {
+            Write-Log "Phase directory not found: $Phase" "Gray"
+        }
     }
-    else {
-        Write-Log "Phase directory not found: $Phase" "Gray"
+    
+    # Mark Main Setup as Complete so next time we skip this block
+    Set-TaskComplete "MainSetup"
+    
+    # 4. COMPLETION & NEXT BOOT SETUP (First Run)
+    Write-Header "SETUP COMPLETE"
+    Write-Log "Configuring Post-Reboot tasks (Scheduled Task)..." "Cyan"
+
+    $AfterBootScript = Join-Path $SetupDir "Scripts\AfterRestart\RunAfterBoot.ps1"
+    if (Test-Path $AfterBootScript) {
+        # Create Scheduled Task Action
+        $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$AfterBootScript`""
+        
+        # Create Trigger (AtLogon)
+        $Trigger = New-ScheduledTaskTrigger -AtLogon
+        
+        # Create Principal (Run as Admin/System)
+        $Principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Administrators" -RunLevel Highest
+
+        # Register Task
+        $TaskName = "WindowsSetup_PostBoot"
+        Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Force | Out-Null
+        
+        Write-Log "  -> Registered Scheduled Task '$TaskName' for next login." "Green"
+    } else {
+        Write-Log "  -> RunAfterBoot.ps1 not found!" "Red"
     }
-}
 
-# 4. COMPLETION & NEXT BOOT SETUP
-Write-Header "SETUP COMPLETE"
-Write-Log "Configuring Post-Reboot tasks (Scheduled Task)..." "Cyan"
+    Write-Progress -Activity "Windows Setup Progress" -Completed
+    Write-Log "All tasks finished. System will reboot in 10 seconds to apply all changes." "Yellow"
 
-$AfterBootScript = Join-Path $SetupDir "Scripts\AfterRestart\RunAfterBoot.ps1"
-if (Test-Path $AfterBootScript) {
-    # Create Scheduled Task Action
-    $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$AfterBootScript`""
-    
-    # Create Trigger (AtLogon)
-    $Trigger = New-ScheduledTaskTrigger -AtLogon
-    
-    # Create Principal (Run as Admin/System)
-    # Using specific user might be tricky if password is required, but running as "Users" group member with "RunLevel Highest" usually works for interactive session.
-    # However, for AutoLogin user, running as that user is best.
-    # Let's try running as the built-in Users group (interactive) with Elevation.
-    $Principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Administrators" -RunLevel Highest
+    # Final Countdown & Reboot
+    for ($i = 10; $i -gt 0; $i--) {
+        Write-Log "Rebooting in $i..." "Gray"
+        Start-Sleep -Seconds 1
+    }
 
-    # Register Task
-    $TaskName = "WindowsSetup_PostBoot"
-    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Force | Out-Null
-    
-    Write-Log "  -> Registered Scheduled Task '$TaskName' for next login." "Green"
+    Restart-Computer -Force
+
 } else {
-    Write-Log "  -> RunAfterBoot.ps1 not found!" "Red"
+    Write-Header "MAIN SETUP ALREADY COMPLETE"
+    Write-Log "Skipping primary phases. Checking 'AfterRestart' scripts..." "Cyan"
+    
+    # Direct execution of post-boot scripts (Update Mode)
+    $AfterBootScript = Join-Path $SetupDir "Scripts\AfterRestart\RunAfterBoot.ps1"
+    if (Test-Path $AfterBootScript) {
+        & $AfterBootScript
+    } else {
+        Write-Log "RunAfterBoot.ps1 not found!" "Red"
+    }
 }
-
-Write-Progress -Activity "Windows Setup Progress" -Completed
-Write-Log "All tasks finished. System will reboot in 10 seconds to apply all changes." "Yellow"
-
-# Final Countdown & Reboot
-for ($i = 10; $i -gt 0; $i--) {
-    Write-Log "Rebooting in $i..." "Gray"
-    Start-Sleep -Seconds 1
-}
-
-Restart-Computer -Force

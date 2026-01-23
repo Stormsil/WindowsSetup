@@ -227,6 +227,7 @@ while ($true) {
     if ($score -lt 30) {
         Write-Host "`n [OK] Good proxy. Setting up..." -ForegroundColor Green
         New-ProxifierProfile -ProxyInfo $proxyInfo
+        break # Exit the loop after successful setup
     } else {
         Write-Host "`n [!] Fraud score $score. Skipping." -ForegroundColor Yellow
     }
