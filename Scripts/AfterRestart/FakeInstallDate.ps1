@@ -3,6 +3,11 @@
 # ==========================================
 # Randomizes the installation date between 0.5 and 1.5 years ago.
 
+function Write-Log {
+    param($Msg, $Col = "White")
+    Write-Host "[FakeDate] $Msg" -ForegroundColor $Col
+}
+
 # Ensure the script is running with Administrator privileges
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     Write-Log "Error: This script must be run as Administrator." "Red"

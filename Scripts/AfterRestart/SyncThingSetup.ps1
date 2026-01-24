@@ -6,10 +6,15 @@ $MainPcName     = "Main-Desktop-PC"
 $FolderId       = "GlobalSync" 
 $SyncFolderPath = "C:\Sync"
 
+function Write-Log {
+    param($Msg, $Col = "White")
+    Write-Host "[SyncThing] $Msg" -ForegroundColor $Col
+}
+
 # ==========================================================
 # 1. FIND ACTUAL BINARY & FIREWALL
 # ==========================================================
-Write-Host "--- STEP 1: FIREWALL & BINARY ---" -ForegroundColor Cyan
+Write-Log "--- STEP 1: FIREWALL & BINARY ---" "Cyan"
 
 $standardPaths = @(
     "C:\Program Files\Syncthing\syncthing.exe",

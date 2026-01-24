@@ -2,41 +2,36 @@
 # SET RESOLUTION (VIA QRES)
 # ==========================================
 
-$ScriptDir = $PSScriptRoot
-$Global:SetupDir = Resolve-Path (Join-Path $ScriptDir "..\..")
+function Write-Log {
+    param($Msg, $Col = "White")
+    Write-Host "[Resolution] $Msg" -ForegroundColor $Col
+}
 
-# --- SETTINGS ---
-$ToolPath = Join-Path $Global:SetupDir "Scripts\Tools\QRes.exe"
+# Auto-calculate Tool Path
+$CurrentDir = $PSScriptRoot
+# Try to find Tools folder (it's in Scripts/Tools)
+$ToolsDir = Join-Path (Split-Path $CurrentDir -Parent) "Tools"
+$ToolPath = Join-Path $ToolsDir "QRes.exe"
+
 $Width = 1920
 $Height = 1080
 $RefreshRate = 60
-# ----------------
 
 function Run-QRes {
-    # 1. Check if QRes exists
     if (-not (Test-Path $ToolPath)) {
-        Write-Host "ERROR: QRes.exe not found at: $ToolPath" -ForegroundColor Red
+        Write-Log "ERROR: QRes.exe not found at: $ToolPath" "Red"
         return
     }
 
-    Write-Host "QRes found. Checking available modes..." -ForegroundColor Cyan
+    Write-Log "Setting resolution: ${Width}x${Height} @ ${RefreshRate}Hz" "Cyan"
     
-    # 2. Debug: List available modes (Switch /L)
-    # Using Start-Process to capture output if needed, but here just running it
-    & $ToolPath /L
-    
-    Write-Host "`n----------------------------------------"
-    Write-Host "Attempting to set resolution: ${Width}x${Height} @ ${RefreshRate}Hz" -ForegroundColor Yellow
-    
-    # 3. Execute with arguments: /x:Width /y:Height /r:Rate
-    # QRes usually returns immediately
-    & $ToolPath /x:$Width /y:$Height /r:$RefreshRate
+    # Execute QRes
+    & $ToolPath /x:$Width /y:$Height /r:$RefreshRate | Out-Null
 
-    # Check for success (simple check)
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "SUCCESS: QRes command sent." -ForegroundColor Green
+        Write-Log "SUCCESS: Resolution applied." "Green"
     } else {
-        Write-Host "QRes Exit Code: $LASTEXITCODE. This might be normal if resolution changed." -ForegroundColor Gray
+        Write-Log "QRes finished (Code: $LASTEXITCODE)." "Gray"
     }
 }
 

@@ -2,35 +2,32 @@
 # EJECT ISO AND DVD DRIVES
 # ==========================================
 
-function Eject-IsoAndDvd {
-    Write-Host "Scanning for Optical Drives (CD/DVD/ISO)..." -ForegroundColor Cyan
+function Write-Log {
+    param($Msg, $Col = "White")
+    Write-Host "[Eject] $Msg" -ForegroundColor $Col
+}
 
-    # Find all drives with DriveType = 5 (CD-ROM/DVD/ISO)
+function Eject-IsoAndDvd {
+    Write-Log "Scanning for Optical Drives (CD/DVD/ISO)..." "Cyan"
+
     $opticalDrives = Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.DriveType -eq 5 }
 
     if ($opticalDrives) {
         $shell = New-Object -ComObject Shell.Application
-        
         foreach ($vol in $opticalDrives) {
             $driveLetter = $vol.DriveLetter
-            
             if ($driveLetter) {
-                Write-Host "Found Drive: $driveLetter ($($vol.Label))" -ForegroundColor Yellow
-                Write-Host "Attempting to eject..." -NoNewline
-                
+                Write-Log "Found Drive: $driveLetter ($($vol.Label)). Ejecting..." "Yellow"
                 try {
-                    # Use Shell Namespace to invoke the native "Eject" verb
                     $shell.Namespace(17).ParseName($driveLetter).InvokeVerb("Eject")
-                    Write-Host " [OK]" -ForegroundColor Green
-                }
-                catch {
-                    Write-Host " [FAILED]" -ForegroundColor Red
-                    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+                    Write-Log "  -> OK" "Green"
+                } catch {
+                    Write-Log "  -> FAILED: $($_.Exception.Message)" "Red"
                 }
             }
         }
     } else {
-        Write-Host "No Optical/ISO drives found." -ForegroundColor Gray
+        Write-Log "No Optical/ISO drives found." "Gray"
     }
 }
 
