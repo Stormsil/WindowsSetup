@@ -122,9 +122,9 @@ if (-not (Test-Task "MainSetup")) {
         $vmName = Get-VmName
         $botToken = "8535757715:AAGU_eMN6abKWANdaZ4kY_YTRfenvhQSZXA"
         $chatID = "570723201"
-        $message = "ScriptComplete! [$vmName] Restart VM"
+        $message = "✅ Setup Complete! [$vmName] - Restarting VM..."
         Write-Log "Sending Telegram notification for $vmName..." "Gray"
-        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage?chat_id=$chatID&text=$message" -ErrorAction SilentlyContinue | Out-Null
+        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -Body @{chat_id=$chatID; text=$message} -ErrorAction SilentlyContinue | Out-Null
     } catch {
         Write-Log "Failed to send Telegram notification." "Yellow"
     }

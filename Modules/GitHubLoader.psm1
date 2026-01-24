@@ -106,17 +106,10 @@ function Invoke-GitHubDownload {
                     }
                 }
 
-                # Auto-Unzip
-                if ($LocalPath.EndsWith(".zip") -and (Test-Path $LocalPath)) {
-                    # Check if already extracted? (Simplification: just overwrite for now or rely on idempotent scripts)
-                    Write-Log "  -> Unzipping archive..." "Cyan"
-                    try {
-                        Expand-Archive -Path $LocalPath -DestinationPath $DestDir -Force
-                        Write-Log "  -> Extracted." "Green"
-                    } catch {
-                        Write-Log "  -> Extraction failed: $_" "Red"
-                    }
-                }
+                # Auto-Unzip disabled (handled by specific scripts)
+                # if ($LocalPath.EndsWith(".zip") -and (Test-Path $LocalPath)) {
+                #     ...
+                # }
             }
 
             # ==============================================================================
