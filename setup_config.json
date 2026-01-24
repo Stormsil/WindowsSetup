@@ -3,13 +3,13 @@
     "RepoName": "WindowsSetup",
     "ReleaseTag": "files",
     "SilentArgs": "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART",
-    "choco_packages": [
-        "dotnet-8.0-sdk",
-        "webview2-runtime",
-        "googlechrome",
-        "notepadplusplus",
-        "winrar",
-        "syncthing"
+    "apps": [
+        { "name": ".NET 8 SDK", "file": "APP_SDKNET8.exe", "args": "/install /quiet /norestart", "registry": "Microsoft .NET SDK 8.0" },
+        { "name": "WebView2 Runtime", "file": "APP_WebView2.exe", "args": "/silent /install", "registry": "Microsoft Edge WebView2 Runtime" },
+        { "name": "Google Chrome", "file": "APP_Chrome.exe", "args": "/silent /install", "registry": "Google Chrome" },
+        { "name": "Notepad++", "file": "APP_Notepad.exe", "args": "/S", "registry": "Notepad++" },
+        { "name": "WinRAR", "file": "APP_WinRAR.exe", "args": "/S", "registry": "WinRAR" },
+        { "name": "Syncthing", "file": "APP_SyncThing.exe", "args": "/silent /allusers", "registry": "Syncthing" }
     ],
     "system_user": {
         "name": "User",

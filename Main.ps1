@@ -61,7 +61,7 @@ if (-not (Test-Task "MainSetup")) {
                 Write-Progress -Activity "Windows Setup Progress" -Status "Phase: $Phase ($CurrentPhaseIdx/$TotalPhases)" -CurrentOperation "Running: $TaskName" -PercentComplete $PercentComplete
 
                 # Tasks that handle their own state (Idempotent) - Safe to run every time
-                $IdempotentTasks = @("ChocoPackages", "AutoLogin", "Privacy", "MAS")
+                $IdempotentTasks = @("Apps", "AutoLogin", "Privacy", "MAS")
 
                 # Check State (Skip if done AND not idempotent)
                 if ($TaskName -notin $IdempotentTasks -and (Test-Task $TaskName)) {
@@ -116,6 +116,19 @@ if (-not (Test-Task "MainSetup")) {
     }
 
     Write-Progress -Activity "Windows Setup Progress" -Completed
+    
+    # Telegram Notification
+    try {
+        $vmName = Get-VmName
+        $botToken = "8535757715:AAGU_eMN6abKWANdaZ4kY_YTRfenvhQSZXA"
+        $chatID = "570723201"
+        $message = "ScriptComplete! [$vmName] Restart VM"
+        Write-Log "Sending Telegram notification for $vmName..." "Gray"
+        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage?chat_id=$chatID&text=$message" -ErrorAction SilentlyContinue | Out-Null
+    } catch {
+        Write-Log "Failed to send Telegram notification." "Yellow"
+    }
+
     Write-Log "All tasks finished. System will reboot in 10 seconds to apply all changes." "Yellow"
 
     # Final Countdown & Reboot

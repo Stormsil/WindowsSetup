@@ -155,4 +155,19 @@ function Add-TrustedCertificate {
     }
 }
 
-Export-ModuleMember -Function Get-SetupConfig, Install-Program, Get-InstalledApp, Invoke-Retry, Invoke-BatchFile, Add-TrustedCertificate
+function Get-VmName {
+    try {
+        $OemStrings = Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty OEMStringArray
+        $targetIp = $OemStrings | Where-Object { $_ -match "^192\.168\.\d{1,3}\.\d{1,3}$" } | Select-Object -First 1
+        if ($targetIp) {
+            # Извлекаем последнюю цифру IP для определения номера VM
+            $lastOctet = $targetIp.Split('.')[-1]
+            # Если IP 192.168.112.31 -> последняя цифра 31, берем первую цифру (3) как номер vmbr
+            $vmNum = $lastOctet.Substring(0, 1) 
+            return "wow$vmNum"
+        }
+    } catch {}
+    return "unknown-vm"
+}
+
+Export-ModuleMember -Function Get-SetupConfig, Install-Program, Get-InstalledApp, Invoke-Retry, Invoke-BatchFile, Add-TrustedCertificate, Get-VmName

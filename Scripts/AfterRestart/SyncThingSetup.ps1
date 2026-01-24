@@ -11,7 +11,20 @@ $SyncFolderPath = "C:\Sync"
 # ==========================================================
 Write-Host "--- STEP 1: FIREWALL & BINARY ---" -ForegroundColor Cyan
 
-$realExe = (Get-ChildItem -Path "$env:ProgramData\chocolatey\lib\syncthing" -Filter "syncthing.exe" -Recurse | Where-Object { $_.FullName -like "*bin*" -eq $false } | Select-Object -First 1).FullName
+$standardPaths = @(
+    "C:\Program Files\Syncthing\syncthing.exe",
+    "C:\Program Files (x86)\Syncthing\syncthing.exe",
+    "$env:ProgramData\Syncthing\syncthing.exe"
+)
+
+$realExe = $null
+foreach ($path in $standardPaths) {
+    if (Test-Path $path) {
+        $realExe = $path
+        break
+    }
+}
+
 if (!$realExe) { $realExe = (Get-Command "syncthing.exe" -ErrorAction SilentlyContinue).Source }
 
 if (!$realExe) {
