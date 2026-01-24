@@ -74,7 +74,7 @@ Invoke-Step "EjectDrive.ps1"
 
 # 4. Run any "Other" scripts in this folder that are not explicitly ordered
 # Exclude known ones
-$Excluded = @("RunAfterBoot.ps1", "AutoLogin.ps1", "FakeInstallDate.ps1", "SetResolution.ps1", "EjectDrive.ps1", "SyncThingSetup.ps1", "ProxifierSetup.ps1")
+$Excluded = @("0_RunAfterBoot.ps1", "AutoLogin.ps1", "FakeInstallDate.ps1", "SetResolution.ps1", "EjectDrive.ps1", "SyncThingSetup.ps1", "ProxifierSetup.ps1")
 $OtherScripts = Get-ChildItem -Path $ScriptDir -Filter "*.ps1" | Where-Object { $_.Name -notin $Excluded } | Sort-Object Name
 
 foreach ($Script in $OtherScripts) {

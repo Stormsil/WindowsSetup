@@ -61,7 +61,7 @@ if (-not (Test-Task "MainSetup")) {
                 Write-Progress -Activity "Windows Setup Progress" -Status "Phase: $Phase ($CurrentPhaseIdx/$TotalPhases)" -CurrentOperation "Running: $TaskName" -PercentComplete $PercentComplete
 
                 # Tasks that handle their own state (Idempotent) - Safe to run every time
-                $IdempotentTasks = @("Apps", "AutoLogin", "Privacy", "MAS")
+                $IdempotentTasks = @("Apps", "Privacy", "MAS")
 
                 # Check State (Skip if done AND not idempotent)
                 if ($TaskName -notin $IdempotentTasks -and (Test-Task $TaskName)) {
@@ -111,9 +111,9 @@ if (-not (Test-Task "MainSetup")) {
         Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Force | Out-Null
         
         Write-Log "  -> Registered task '$TaskName'. Folder will open after reboot." "Green"
-        Write-Log "  -> IMPORTANT: After reboot, right-click 'RunAfterBoot.ps1' and select 'Run with PowerShell'." "Yellow"
+        Write-Log "  -> IMPORTANT: After reboot, right-click '0_RunAfterBoot.ps1' and select 'Run with PowerShell'." "Yellow"
     } else {
-        Write-Log "  -> RunAfterBoot.ps1 not found!" "Red"
+        Write-Log "  -> 0_RunAfterBoot.ps1 not found!" "Red"
     }
 
     Write-Progress -Activity "Windows Setup Progress" -Completed
@@ -145,10 +145,10 @@ if (-not (Test-Task "MainSetup")) {
     Write-Log "Skipping primary phases. Checking 'AfterRestart' scripts..." "Cyan"
     
     # Direct execution of post-boot scripts (Update Mode)
-    $AfterBootScript = Join-Path $SetupDir "Scripts\AfterRestart\RunAfterBoot.ps1"
+    $AfterBootScript = Join-Path $SetupDir "Scripts\AfterRestart\0_RunAfterBoot.ps1"
     if (Test-Path $AfterBootScript) {
         & $AfterBootScript
     } else {
-        Write-Log "RunAfterBoot.ps1 not found!" "Red"
+        Write-Log "0_RunAfterBoot.ps1 not found!" "Red"
     }
 }
