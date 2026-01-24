@@ -93,24 +93,25 @@ if (-not (Test-Task "MainSetup")) {
     
     # 4. COMPLETION & NEXT BOOT SETUP (First Run)
     Write-Header "SETUP COMPLETE"
-    Write-Log "Configuring Post-Reboot tasks (Scheduled Task)..." "Cyan"
+    Write-Log "Configuring Post-Reboot Folder Opener..." "Cyan"
 
-    $AfterBootScript = Join-Path $SetupDir "Scripts\AfterRestart\RunAfterBoot.ps1"
-    if (Test-Path $AfterBootScript) {
-        # Create Scheduled Task Action
-        $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$AfterBootScript`""
+    $AfterRestartDir = Join-Path $SetupDir "Scripts\AfterRestart"
+    if (Test-Path $AfterRestartDir) {
+        # Action: Open Explorer in the specific folder
+        $Action = New-ScheduledTaskAction -Execute "explorer.exe" -Argument "`"$AfterRestartDir`""
         
-        # Create Trigger (AtLogon)
+        # Trigger: AtLogon
         $Trigger = New-ScheduledTaskTrigger -AtLogon
         
-        # Create Principal (Run as Admin/System)
+        # Principal: Run as current user (Highest privileges)
         $Principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Administrators" -RunLevel Highest
 
         # Register Task
-        $TaskName = "WindowsSetup_PostBoot"
+        $TaskName = "WindowsSetup_ManualStep"
         Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Force | Out-Null
         
-        Write-Log "  -> Registered Scheduled Task '$TaskName' for next login." "Green"
+        Write-Log "  -> Registered task '$TaskName'. Folder will open after reboot." "Green"
+        Write-Log "  -> IMPORTANT: After reboot, right-click 'RunAfterBoot.ps1' and select 'Run with PowerShell'." "Yellow"
     } else {
         Write-Log "  -> RunAfterBoot.ps1 not found!" "Red"
     }

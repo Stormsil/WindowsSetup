@@ -90,10 +90,10 @@ Invoke-Step "ProxifierSetup.ps1"
 # Cleanup Scheduled Task if everything finished successfully
 if ($AllStepsSuccess) {
     Write-Log "All post-boot tasks completed successfully." "Green"
-    Write-Log "Unregistering startup task..." "Cyan"
-    Unregister-ScheduledTask -TaskName "WindowsSetup_PostBoot" -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Log "Unregistering folder-opener task..." "Cyan"
+    Unregister-ScheduledTask -TaskName "WindowsSetup_ManualStep" -Confirm:$false -ErrorAction SilentlyContinue
 } else {
-    Write-Log "Some tasks failed. Startup task retained for next retry." "Yellow"
+    Write-Log "Some tasks failed. Task retained for next retry." "Yellow"
 }
 
 Write-Header "POST-REBOOT SETUP COMPLETE"
