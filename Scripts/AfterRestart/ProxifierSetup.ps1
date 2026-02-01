@@ -8,7 +8,7 @@
 
 # --- CONFIGURATION ---
 $Global:Config = @{
-    ApiKey      = "8kIkW7GuPKIXKkdXyTQukHhIFEgcoEak" # Your API Key
+    ApiKey      = "kGOA6c0mqznmCmoCTEcacMON85hfgv1Z" # Your API Key
     Strictness  = 2
     ProcessName = "Proxifier"
 }
